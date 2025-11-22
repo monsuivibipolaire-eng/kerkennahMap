@@ -1,0 +1,6 @@
+/* Assure que le conteneur de la carte prend toute la hauteur disponible */
+:host {
+  display: block;
+  height: 100%; 
+  /* height: calc(100vh - header_height - footer_height) est géré par le flex-grow du layout principal */
+}
