@@ -6,18 +6,25 @@ import { environment } from '../../../environments/environment';
   providedIn: 'root'
 })
 export class SupabaseImageService {
-  private supabase: SupabaseClient;
+  private supabase: SupabaseClient | null = null;
 
   constructor() {
-    // ATTENTION: Vous devrez ajouter 'supabaseUrl' et 'supabaseKey' dans votre environment.ts
-    // Pour l'instant, on utilise des valeurs vides pour que ça compile sans erreur
-    const sbUrl = (environment as any).supabaseUrl || '';
-    const sbKey = (environment as any).supabaseKey || '';
-    this.supabase = createClient(sbUrl, sbKey);
+    const sbUrl = (environment as any).supabaseUrl;
+    const sbKey = (environment as any).supabaseKey;
+
+    if (sbUrl && sbKey && sbUrl !== 'https://votre-projet.supabase.co') {
+      this.supabase = createClient(sbUrl, sbKey);
+    } else {
+      console.warn('Supabase non configuré. L\'upload d\'images ne fonctionnera pas.');
+    }
   }
 
-  // Upload d'une image
   async uploadImage(file: File, path: string): Promise<string | null> {
+    if (!this.supabase) {
+      console.error('Impossible d\'uploader : Supabase n\'est pas initialisé.');
+      return null;
+    }
+
     const { data, error } = await this.supabase.storage
       .from('places-images')
       .upload(path, file);
@@ -27,7 +34,6 @@ export class SupabaseImageService {
       return null;
     }
 
-    // Récupération de l'URL publique
     const { data: publicUrlData } = this.supabase.storage
       .from('places-images')
       .getPublicUrl(path);

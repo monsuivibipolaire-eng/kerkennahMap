@@ -8,5 +8,7 @@ export const environment = {
     messagingSenderId: '271484483702',
     appId: '1:271484483702:web:5557f410ceaacac2010757',
     measurementId: 'G-FXFDCLE25Q'
-  }
+  },
+  supabaseUrl: 'https://votre-projet.supabase.co',
+  supabaseKey: 'votre-cle-anon-publique'
 };
