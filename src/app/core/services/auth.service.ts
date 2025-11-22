@@ -1,26 +1,28 @@
-import { Injectable } from '@angular/core';
-import { AngularFireAuth } from '@angular/fire/compat/auth';
-import { AngularFirestore } from '@angular/fire/compat/firestore';
-import { Observable, of } from 'rxjs';
+import { Injectable, inject } from '@angular/core';
+import { Auth, authState, GoogleAuthProvider, signInWithPopup, signOut, User as FirebaseUser } from '@angular/fire/auth';
+import { Firestore, doc, setDoc, docData } from '@angular/fire/firestore';
+import { Observable, of, from } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 import { User } from '../models/user.model';
-import firebase from 'firebase/compat/app';
 
 @Injectable({
   providedIn: 'root'
 })
 export class AuthService {
+  // Injection directe des services modulaires
+  private auth: Auth = inject(Auth);
+  private firestore: Firestore = inject(Firestore);
+
   user$: Observable<User | null | undefined>;
 
-  constructor(
-    private afAuth: AngularFireAuth,
-    private afs: AngularFirestore
-  ) {
-    // Observe l'état de l'utilisateur et récupère ses données Firestore correspondantes
-    this.user$ = this.afAuth.authState.pipe(
-      switchMap(user => {
+  constructor() {
+    // authState() est la version modulaire de afAuth.authState
+    this.user$ = authState(this.auth).pipe(
+      switchMap((user: FirebaseUser | null) => {
         if (user) {
-          return this.afs.doc<User>(`users/${user.uid}`).valueChanges();
+          // docData() remplace valueChanges()
+          const userDocRef = doc(this.firestore, `users/${user.uid}`);
+          return docData(userDocRef) as Observable<User>;
         } else {
           return of(null);
         }
@@ -28,31 +30,36 @@ export class AuthService {
     );
   }
 
-  // Connexion Google
-  async googleSignin() {
-    const provider = new firebase.auth.GoogleAuthProvider();
-    const credential = await this.afAuth.signInWithPopup(provider);
-    return this.updateUserData(credential.user);
+  // Connexion Google (Promise)
+  async googleSignin(): Promise<void> {
+    const provider = new GoogleAuthProvider();
+    try {
+      const credential = await signInWithPopup(this.auth, provider);
+      await this.updateUserData(credential.user);
+    } catch (error) {
+      console.error("Erreur AuthService (Modulaire):", error);
+      throw error;
+    }
   }
 
   // Déconnexion
-  async signOut() {
-    await this.afAuth.signOut();
+  async signOut(): Promise<void> {
+    await signOut(this.auth);
   }
 
-  // Met à jour les données utilisateur dans Firestore après connexion
-  private updateUserData(user: firebase.User | null) {
-    if (!user) return;
-    const userRef = this.afs.doc(`users/${user.uid}`);
+  // Mise à jour des données utilisateur
+  private async updateUserData(user: FirebaseUser): Promise<void> {
+    const userDocRef = doc(this.firestore, `users/${user.uid}`);
     
     const data: User = {
       uid: user.uid,
       email: user.email || '',
       displayName: user.displayName || '',
-      roles: ['user'], // Par défaut. À changer manuellement en BDD pour admin
+      roles: ['user'], // Attention : merge: true protège les données existantes
       createdAt: new Date()
     };
 
-    return userRef.set(data, { merge: true });
+    // setDoc avec { merge: true } remplace userRef.set(..., { merge: true })
+    await setDoc(userDocRef, data, { merge: true });
   }
 }
