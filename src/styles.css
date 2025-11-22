@@ -1,0 +1,7 @@
+/* Tailwind CSS v3 Directives */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Styles globaux */
+html, body { height: 100%; margin: 0; }

@@ -1,0 +1,65 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- Fonctions utilitaires ---
+    
+    // Vérifie si l'utilisateur est connecté
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Vérifie si l'utilisateur est le créateur du document
+    function isOwner(resource) {
+      return isAuthenticated() && resource.data.createdBy == request.auth.uid;
+    }
+
+    // Vérifie si l'utilisateur possède le custom claim 'admin'
+    // Note : Cela nécessite de définir ce claim via une Cloud Function ou le script admin
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.admin == true;
+    }
+
+    // --- Règles pour la collection 'places' ---
+    match /places/{placeId} {
+      
+      // 1. LECTURE (READ) : list et get
+      // - Public : Tout le monde peut lire si le statut est 'approved'
+      // - Propriétaire : Peut lire ses propres lieux (même 'pending' ou 'rejected')
+      // - Admin : Peut tout lire
+      allow read: if (resource.data.status == 'approved')
+                  || isOwner(resource)
+                  || isAdmin();
+
+      // 2. CRÉATION (CREATE)
+      // - Utilisateur connecté uniquement
+      // - Le statut initial DOIT être 'pending'
+      // - L'utilisateur doit s'assigner lui-même comme créateur (createdBy)
+      allow create: if isAuthenticated()
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.createdBy == request.auth.uid;
+
+      // 3. MISE À JOUR (UPDATE)
+      // - Admin : Accès total
+      // - Propriétaire : Peut modifier sauf le champ 'status' (pour éviter l'auto-approbation)
+      allow update: if isAdmin()
+                    || (isOwner(resource) 
+                        && request.resource.data.status == resource.data.status // Interdit de changer le statut
+                        && request.resource.data.createdBy == resource.data.createdBy); // Interdit de changer le propriétaire
+
+      // 4. SUPPRESSION (DELETE)
+      // - Admin uniquement
+      // (Optionnel : autoriser le propriétaire si le lieu est encore 'pending')
+      allow delete: if isAdmin();
+    }
+
+    // --- Règles pour la collection 'users' ---
+    match /users/{userId} {
+      // Chacun peut lire et écrire ses propres données profil
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+      // Les admins peuvent lire tous les utilisateurs (utile pour la liste admin)
+      allow read: if isAdmin();
+    }
+  }
+}

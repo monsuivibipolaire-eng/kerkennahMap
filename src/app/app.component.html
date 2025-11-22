@@ -1,0 +1,15 @@
+<!-- Structure Flexbox pleine hauteur pour coller le footer en bas -->
+<div class="flex flex-col h-screen">
+  
+  <!-- En-tête -->
+  <app-header class="z-50"></app-header>
+
+  <!-- Contenu Principal (La carte prendra tout l'espace restant) -->
+  <main class="flex-grow relative bg-gray-100">
+    <router-outlet></router-outlet>
+  </main>
+
+  <!-- Pied de page -->
+  <app-footer class="z-50"></app-footer>
+
+</div>
