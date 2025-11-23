@@ -1,6 +1,11 @@
 import { Component } from '@angular/core';
-import { RouterModule } from '@angular/router'; // Pour routerLink
 import { CommonModule } from '@angular/common';
+import { RouterModule, Router } from '@angular/router';
+import { Observable } from 'rxjs';
+
+// Imports corrigés (chemins relatifs depuis core/components/header/)
+import { AuthService } from '../../services/auth.service';
+import { User } from '../../models/user.model';
 
 @Component({
   selector: 'app-header',
@@ -9,4 +14,21 @@ import { CommonModule } from '@angular/common';
   templateUrl: './header.component.html',
   styleUrls: ['./header.component.css']
 })
-export class HeaderComponent {}
+export class HeaderComponent {
+  user$: Observable<User | null | undefined>;
+  isMobileMenuOpen = false;
+
+  constructor(private auth: AuthService, private router: Router) {
+    this.user$ = this.auth.user$;
+  }
+
+  toggleMobileMenu() {
+    this.isMobileMenuOpen = !this.isMobileMenuOpen;
+  }
+
+  async logout() {
+    await this.auth.signOut();
+    this.router.navigate(['/login']);
+    this.isMobileMenuOpen = false;
+  }
+}

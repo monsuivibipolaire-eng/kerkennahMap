@@ -9,6 +9,6 @@ export const environment = {
     appId: '1:271484483702:web:5557f410ceaacac2010757',
     measurementId: 'G-FXFDCLE25Q'
   },
-  supabaseUrl: 'https://votre-projet.supabase.co',
-  supabaseKey: 'votre-cle-anon-publique'
+  supabaseUrl: 'https://bcuxfuqgwoqyammgmpjw.supabase.co',
+  supabaseKey: 'sb_secret_GnRXdBMwhJqpO4LZGKfwKg_HbVpIYjh'
 };
