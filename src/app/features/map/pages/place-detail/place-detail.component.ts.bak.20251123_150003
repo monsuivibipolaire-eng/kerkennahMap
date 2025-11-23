@@ -33,15 +33,14 @@ export class PlaceDetailComponent implements OnInit {
   showEditModal = false;
   editingPlace: Place | null = null;
 
-  // ✅ Catégories alignées avec les valeurs Firestore : Restaurant, Fruits de mer, etc.
+  // Catégories proposées
   availableCategories: string[] = [
-    'Restaurant',
-    'Fruits de mer',
-    'Café',
-    'Parc',
-    'Plage',
-    'Monument',
-    'Hébergement'
+    'café',
+    'restaurant',
+    'parc',
+    'plage',
+    'monument',
+    'hébergement'
   ];
 
   // Upload images
