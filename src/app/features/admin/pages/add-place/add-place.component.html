@@ -1,84 +1,164 @@
 <div class="container mx-auto p-6 max-w-3xl">
-  
   <div class="bg-white rounded-xl shadow-lg p-8">
-    <h1 class="text-2xl font-bold text-blue-900 mb-6 border-b pb-2">Ajouter un nouveau lieu</h1>
+    <h1 class="text-2xl font-bold text-blue-900 mb-6 border-b pb-2">
+      Ajouter un nouveau lieu
+    </h1>
 
     <!-- Messages -->
-    <div *ngIf="errorMessage" class="mb-4 bg-red-50 text-red-600 p-3 rounded border border-red-100">
+    <div
+      *ngIf="errorMessage"
+      class="mb-4 bg-red-50 text-red-600 p-3 rounded border border-red-100"
+    >
       {{ errorMessage }}
     </div>
-    <div *ngIf="successMessage" class="mb-4 bg-green-50 text-green-600 p-3 rounded border border-green-100">
+    <div
+      *ngIf="successMessage"
+      class="mb-4 bg-green-50 text-green-600 p-3 rounded border border-green-100"
+    >
       {{ successMessage }}
     </div>
 
-    <form (ngSubmit)="onSubmit()" #placeForm="ngForm" class="space-y-6">
-      
+    <form
+      #placeForm="ngForm"
+      (ngSubmit)="onSubmit(placeForm)"
+      class="space-y-6"
+    >
       <!-- Nom -->
       <div>
-        <label class="block text-gray-700 font-medium mb-1">Nom du lieu *</label>
-        <input type="text" [(ngModel)]="model.name" name="name" required
-               class="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
-               placeholder="Ex: Restaurant La Sirène">
+        <label class="block text-gray-700 font-medium mb-1"
+          >Nom du lieu *</label
+        >
+        <input
+          type="text"
+          [(ngModel)]="model.name"
+          name="name"
+          required
+          class="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+          placeholder="Ex: Restaurant La Sirène"
+        />
       </div>
 
       <!-- Description -->
       <div>
-        <label class="block text-gray-700 font-medium mb-1">Description *</label>
-        <textarea [(ngModel)]="model.description" name="description" required rows="3"
-                  class="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
-                  placeholder="Décrivez ce lieu..."></textarea>
+        <label class="block text-gray-700 font-medium mb-1"
+          >Description *</label
+        >
+        <textarea
+          [(ngModel)]="model.description"
+          name="description"
+          required
+          rows="3"
+          class="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+          placeholder="Décrivez ce lieu..."
+        ></textarea>
       </div>
 
       <!-- Catégories -->
       <div>
         <label class="block text-gray-700 font-medium mb-2">Catégories</label>
-        <div class="flex flex-wrap gap-3">
-          <label *ngFor="let cat of categoriesList" class="flex items-center space-x-2 bg-gray-50 px-3 py-2 rounded border cursor-pointer hover:bg-blue-50">
-            <input type="checkbox" (change)="toggleCategory(cat, $event)" class="rounded text-blue-600">
-            <span class="text-gray-700 text-sm">{{ cat }}</span>
+        <p class="text-xs text-gray-500 mb-2">
+          Sélectionnez une ou plusieurs catégories correspondant au lieu.
+        </p>
+        <div class="flex flex-wrap gap-2">
+          <label
+            *ngFor="let cat of categoriesList"
+            class="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-full border cursor-pointer hover:bg-blue-50"
+          >
+            <input
+              type="checkbox"
+              [checked]="model.categories?.includes(cat)"
+              (change)="toggleCategory(cat, $event)"
+              class="rounded text-blue-600"
+            />
+            <span class="text-gray-700 text-xs md:text-sm">{{ cat }}</span>
           </label>
         </div>
       </div>
 
       <!-- Position (Carte) -->
       <div>
-        <label class="block text-gray-700 font-medium mb-1">Position (Cliquez sur la carte) *</label>
-        <p class="text-xs text-gray-500 mb-2">Lat: {{ model.latitude | number:'1.4-4' }}, Lng: {{ model.longitude | number:'1.4-4' }}</p>
-        
-        <div class="h-64 w-full rounded overflow-hidden border border-gray-300 relative z-0">
-          <div class="h-full w-full"
-               leaflet 
-               [leafletOptions]="mapOptions"
-               [leafletLayers]="mapLayers"
-               (leafletMapReady)="onMapReady($event)">
+        <label class="block text-gray-700 font-medium mb-1">
+          Position (Cliquez sur la carte) *
+        </label>
+        <p class="text-xs text-gray-500 mb-2">
+          Lat:
+          {{ model.latitude | number : '1.4-4' }},
+          Lng:
+          {{ model.longitude | number : '1.4-4' }}
+        </p>
+
+        <div
+          class="h-64 w-full rounded overflow-hidden border border-gray-300 relative z-0"
+        >
+          <div
+            class="h-full w-full"
+            leaflet
+            [leafletOptions]="mapOptions"
+            [leafletLayers]="mapLayers"
+            (leafletMapReady)="onMapReady($event)"
+          >
           </div>
         </div>
       </div>
 
       <!-- Images -->
       <div>
-        <label class="block text-gray-700 font-medium mb-1">Photo</label>
-        <input type="file" (change)="onFileSelected($event)" accept="image/*"
-               class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
-        
-        <div *ngIf="uploadingImage" class="text-sm text-blue-600 mt-1">Téléchargement en cours...</div>
-        
+        <label class="block text-gray-700 font-medium mb-1"
+          >Photos du lieu</label
+        >
+        <input
+          type="file"
+          multiple
+          accept="image/*"
+          (change)="onFileSelected($event)"
+          class="block w-full text-sm text-gray-600
+                 file:mr-4 file:py-2 file:px-4
+                 file:rounded-full file:border-0
+                 file:text-sm file:font-semibold
+                 file:bg-blue-50 file:text-blue-700
+                 hover:file:bg-blue-100"
+        />
+
+        <div *ngIf="uploadingImage" class="text-sm text-blue-600 mt-1">
+          Téléchargement en cours...
+        </div>
+
         <!-- Prévisualisation -->
-        <div *ngIf="model.images && model.images.length > 0" class="mt-2 flex gap-2">
-          <img *ngFor="let img of model.images" [src]="img" class="h-20 w-20 object-cover rounded border">
+        <div
+          *ngIf="model.images && model.images.length > 0"
+          class="mt-3 grid grid-cols-3 gap-3"
+        >
+          <div
+            *ngFor="let img of model.images"
+            class="relative group rounded-lg overflow-hidden border border-gray-200"
+          >
+            <img
+              [src]="img"
+              class="w-full h-24 object-cover"
+              alt="Photo du lieu"
+            />
+            <button
+              type="button"
+              (click)="removeImage(img)"
+              class="absolute top-1 right-1 text-[10px] px-2 py-1 rounded-full bg-black/70 text-white opacity-0 group-hover:opacity-100 transition"
+            >
+              ✕
+            </button>
+          </div>
         </div>
       </div>
 
       <!-- Bouton Soumettre -->
       <div class="pt-4">
-        <button type="submit" 
-                [disabled]="!placeForm.form.valid || isSubmitting || uploadingImage"
-                class="w-full bg-blue-600 text-white font-bold py-3 rounded hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed">
+        <button
+          type="submit"
+          [disabled]="!placeForm.form.valid || isSubmitting || uploadingImage"
+          class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg shadow-md hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+        >
           <span *ngIf="!isSubmitting">Ajouter le lieu</span>
           <span *ngIf="isSubmitting">Enregistrement...</span>
         </button>
       </div>
-
     </form>
   </div>
 </div>

@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+import { FormsModule, NgForm } from '@angular/forms';
 import { LeafletModule } from '@bluehalo/ngx-leaflet';
 import * as L from 'leaflet';
 import { Router } from '@angular/router';
@@ -8,7 +8,6 @@ import { PlacesService } from '../../../../core/services/places.service';
 import { SupabaseImageService } from '../../../../core/services/supabase-image.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { Place } from '../../../../core/models/place.model';
-import { take } from 'rxjs/operators';
 import { firstValueFrom } from 'rxjs';
 
 @Component({
@@ -19,22 +18,67 @@ import { firstValueFrom } from 'rxjs';
   styleUrls: ['./add-place.component.css']
 })
 export class AddPlaceComponent implements OnInit {
+  // Modèle du formulaire
   model: Partial<Place> = {
-    name: '', description: '', latitude: 34.71, longitude: 11.15,
-    categories: [], status: 'pending', images: []
+    name: '',
+    description: '',
+    latitude: 34.71,
+    longitude: 11.15,
+    categories: [],
+    status: 'pending',
+    images: []
   };
-  
-  categoriesList = ['Restaurant', 'Café', 'Plage', 'Hôtel', 'Histoire', 'Pêche', 'Commerce'];
+
+  // ✅ Liste de catégories riche
+  categoriesList: string[] = [
+    'Restaurant',
+    'Fruits de mer',
+    'Café',
+    'Fast-food',
+    'Pizzeria',
+    'Boulangerie',
+    'Glacier',
+    'Bar',
+    'Hôtel',
+    'Maison d’hôtes',
+    'Camping',
+    'Plage',
+    'Parc',
+    'Jardin',
+    'Randonnée',
+    'Musée',
+    'Monument',
+    'Site historique',
+    'Site archéologique',
+    'Centre commercial',
+    'Marché',
+    'Souk',
+    'Commerce',
+    'Spa',
+    'Bien-être',
+    'Activités nautiques',
+    'Pêche',
+    'Famille',
+    'Romantique',
+    'Vue panoramique'
+  ];
+
   isSubmitting = false;
   uploadingImage = false;
   errorMessage = '';
   successMessage = '';
-  
+
   mapOptions: L.MapOptions = {
-    layers: [L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 })],
-    zoom: 10, center: L.latLng(34.71, 11.15)
+    layers: [
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18
+      })
+    ],
+    zoom: 10,
+    center: L.latLng(34.71, 11.15)
   };
-  marker: L.Marker | null = null;
+
+  private marker: L.Marker | null = null;
 
   constructor(
     private placesService: PlacesService,
@@ -42,14 +86,24 @@ export class AddPlaceComponent implements OnInit {
     private auth: AuthService,
     private router: Router
   ) {
-     // Fix Leaflet Icons
-     const iconRetinaUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png';
-     const iconUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png';
-     const shadowUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png';
-     L.Marker.prototype.options.icon = L.icon({
-       iconRetinaUrl, iconUrl, shadowUrl,
-       iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], tooltipAnchor: [16, -28], shadowSize: [41, 41]
-     });
+    // Fix des icônes Leaflet
+    const iconRetinaUrl =
+      'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png';
+    const iconUrl =
+      'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png';
+    const shadowUrl =
+      'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png';
+
+    L.Marker.prototype.options.icon = L.icon({
+      iconRetinaUrl,
+      iconUrl,
+      shadowUrl,
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      tooltipAnchor: [16, -28],
+      shadowSize: [41, 41]
+    });
   }
 
   ngOnInit(): void {
@@ -64,71 +118,132 @@ export class AddPlaceComponent implements OnInit {
     });
   }
 
-  updateMarker(lat: number, lng: number) {
-    if (this.marker) this.marker.setLatLng([lat, lng]);
-    else this.marker = L.marker([lat, lng]);
-  }
-
-  get mapLayers(): L.Layer[] { return this.marker ? [this.marker] : []; }
-
-  toggleCategory(cat: string, event: any) {
-    if (event.target.checked) this.model.categories?.push(cat);
-    else {
-      const index = this.model.categories?.indexOf(cat);
-      if (index !== undefined && index > -1) this.model.categories?.splice(index, 1);
+  private updateMarker(lat: number, lng: number) {
+    if (this.marker) {
+      this.marker.setLatLng([lat, lng]);
+    } else {
+      this.marker = L.marker([lat, lng]);
     }
   }
 
-  async onFileSelected(event: any) {
-    const file = event.target.files[0];
-    if (!file) return;
+  get mapLayers(): L.Layer[] {
+    return this.marker ? [this.marker] : [];
+  }
+
+  // ✅ Gestion des catégories (checkbox)
+  toggleCategory(cat: string, event: Event) {
+    const input = event.target as HTMLInputElement;
+    const checked = input.checked;
+
+    if (!this.model.categories) {
+      this.model.categories = [];
+    }
+
+    if (checked) {
+      if (!this.model.categories.includes(cat)) {
+        this.model.categories.push(cat);
+      }
+    } else {
+      this.model.categories = this.model.categories.filter(c => c !== cat);
+    }
+  }
+
+  // ✅ Upload MULTIPLE images vers Supabase
+  async onFileSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) {
+      return;
+    }
+
+    const files = Array.from(input.files);
 
     this.uploadingImage = true;
     this.errorMessage = '';
-    
+
     try {
-      // Génération nom unique: timestamp_nom
-      const fileName = Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9.]/g, '_');
-      const path = `places/${fileName}`;
-      
-      console.log('Début upload:', path);
-      const url = await this.imageService.uploadImage(file, path);
-      
-      if (url) {
-        this.model.images?.push(url);
+      if (!this.model.images) {
+        this.model.images = [];
       }
+
+      for (const file of files) {
+        const safeName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
+        const fileName = `${Date.now()}_${safeName}`;
+        const path = `places/${fileName}`;
+
+        console.log('📤 Upload image:', path);
+        const url = await this.imageService.uploadImage(file, path);
+        if (url) {
+          this.model.images.push(url);
+        }
+      }
+
+      // reset input
+      input.value = '';
     } catch (err: any) {
       console.error('Upload failed', err);
-      this.errorMessage = "Erreur Upload: " + (err.message || "Vérifiez votre config Supabase");
+      this.errorMessage =
+        "Erreur lors de l'upload des images : " +
+        (err?.message || 'Vérifiez votre configuration Supabase');
     } finally {
       this.uploadingImage = false;
     }
   }
 
-  async onSubmit() {
+  // ✅ Supprimer une image du formulaire (ne supprime pas dans Supabase)
+  removeImage(url: string) {
+    if (!this.model.images) return;
+    this.model.images = this.model.images.filter(img => img !== url);
+  }
+
+  // ✅ Soumission du formulaire
+  async onSubmit(form: NgForm) {
+    if (form.invalid || this.isSubmitting) {
+      return;
+    }
+
     this.isSubmitting = true;
     this.errorMessage = '';
+    this.successMessage = '';
 
     try {
       const user = await firstValueFrom(this.auth.user$);
       if (!user) {
-        this.errorMessage = "Vous devez être connecté.";
+        this.errorMessage = 'Vous devez être connecté.';
         this.isSubmitting = false;
         return;
       }
 
       const placeData: Place = {
-        ...this.model as Place,
-        createdBy: user.uid,
-        createdAt: new Date(),
-        status: 'approved' // Auto-approve pour simplifier le test
+        name: this.model.name!.trim(),
+        description: this.model.description!.trim(),
+        latitude: this.model.latitude!,
+        longitude: this.model.longitude!,
+        categories: this.model.categories || [],
+        images: this.model.images || [],
+        status: 'pending',
+        createdBy: (user as any).uid || (user as any).id || 'unknown',
+        createdAt: new Date()
       };
 
       await this.placesService.addPlace(placeData);
-      
-      this.successMessage = "Lieu ajouté avec succès !";
-      setTimeout(() => this.router.navigate(['/']), 1500);
 
+      this.successMessage = 'Lieu ajouté avec succès !';
+      form.resetForm({
+        latitude: 34.71,
+        longitude: 11.15,
+        categories: [],
+        images: []
+      });
+      this.model = {
+        latitude: 34.71,
+        longitude: 11.15,
+        categories: [],
+        images: [],
+        status: 'pending'
+      };
+      this.updateMarker(34.71, 11.15);
+
+      setTimeout(() => this.router.navigate(['/']), 1500);
     } catch (err) {
       console.error(err);
       this.errorMessage = "Erreur lors de l'enregistrement.";
