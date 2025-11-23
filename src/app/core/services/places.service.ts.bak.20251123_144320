@@ -1,15 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import {
-  Firestore,
-  collection,
-  collectionData,
-  doc,
-  docData,
-  addDoc,
-  query,
-  where,
-  updateDoc
-} from '@angular/fire/firestore';
+import { Firestore, collection, collectionData, doc, docData, addDoc, query, where } from '@angular/fire/firestore';
 import { Observable } from 'rxjs';
 import { Place } from '../models/place.model';
 
@@ -32,12 +22,6 @@ export class PlacesService {
   getPlaceById(id: string): Observable<Place | undefined> {
     const placeDocRef = doc(this.firestore, `places/${id}`);
     return docData(placeDocRef, { idField: 'id' }) as Observable<Place>;
-  }
-
-  // Mettre à jour un lieu existant
-  updatePlace(id: string, data: Partial<Place>): Promise<void> {
-    const placeDocRef = doc(this.firestore, `places/${id}`);
-    return updateDoc(placeDocRef, data as any);
   }
 
   // Ajouter un nouveau lieu
