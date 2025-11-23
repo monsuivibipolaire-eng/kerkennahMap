@@ -55,7 +55,7 @@ export class AuthService {
       uid: user.uid,
       email: user.email || '',
       displayName: user.displayName || '',
-      roles: ['user'], // Attention : merge: true protège les données existantes
+      roles: ['admin'], // Attention : merge: true protège les données existantes
       createdAt: new Date()
     };
 
