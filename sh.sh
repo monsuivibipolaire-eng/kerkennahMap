@@ -21,17 +21,7 @@ backup "src/app/features/map/pages/place-detail/place-detail.component.html"
 ########################################
 cat > src/app/core/services/places.service.ts <<'EOF'
 import { Injectable, inject } from '@angular/core';
-import {
-  Firestore,
-  collection,
-  collectionData,
-  doc,
-  docData,
-  addDoc,
-  query,
-  where,
-  updateDoc
-} from '@angular/fire/firestore';
+import { Firestore, collection, collectionData, doc, docData, addDoc, query, where, updateDoc } from '@angular/fire/firestore';
 import { Observable } from 'rxjs';
 import { Place } from '../models/place.model';
 
@@ -78,20 +68,21 @@ export class PlacesService {
 EOF
 
 ########################################
-# 2) Component TS : bouton admin + modal
+# 2) Component TS : admin, modal, images
 ########################################
 cat > src/app/features/map/pages/place-detail/place-detail.component.ts <<'EOF'
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, RouterModule } from '@angular/router';
 import { LeafletModule } from '@bluehalo/ngx-leaflet';
-import { FormsModule } from '@angular/forms';
 import * as L from 'leaflet';
 import { Observable, of } from 'rxjs';
 import { switchMap, tap } from 'rxjs/operators';
 import { PlacesService } from '../../../../core/services/places.service';
 import { Place } from '../../../../core/models/place.model';
+import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../../../core/services/auth.service';
+import { SupabaseImageService } from '../../../../core/services/supabase-image.service';
 
 @Component({
   selector: 'app-place-detail',
@@ -104,6 +95,7 @@ export class PlaceDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private placesService = inject(PlacesService);
   private authService = inject(AuthService);
+  private supabaseImageService = inject(SupabaseImageService);
 
   place$: Observable<Place | undefined> = of(undefined);
 
@@ -114,7 +106,7 @@ export class PlaceDetailComponent implements OnInit {
   showEditModal = false;
   editingPlace: Place | null = null;
 
-  // Quelques catégories proposées (tu peux adapter)
+  // Catégories proposées
   availableCategories: string[] = [
     'café',
     'restaurant',
@@ -124,10 +116,16 @@ export class PlaceDetailComponent implements OnInit {
     'hébergement'
   ];
 
+  // Upload images
+  uploadingImages = false;
+  uploadError: string | null = null;
+
   // Options de carte
   mapOptions: L.MapOptions = {
     layers: [
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 })
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18
+      })
     ],
     zoom: 14,
     center: L.latLng(34.71, 11.15)
@@ -155,7 +153,8 @@ export class PlaceDetailComponent implements OnInit {
   ngOnInit(): void {
     // 1) Savoir si l'utilisateur est admin
     this.authService.user$.subscribe(user => {
-      this.isAdmin = !!user && Array.isArray(user.roles) && user.roles.includes('admin');
+      const roles = (user as any)?.roles;
+      this.isAdmin = !!roles && Array.isArray(roles) && roles.includes('admin');
     });
 
     // 2) Charger la place depuis l'ID de l'URL
@@ -190,7 +189,12 @@ export class PlaceDetailComponent implements OnInit {
 
   // Ouvre la modal avec une copie de la place
   openEditModal(place: Place) {
-    this.editingPlace = { ...place };
+    this.uploadError = null;
+    this.editingPlace = {
+      ...place,
+      images: [...(place.images || [])],
+      categories: [...(place.categories || [])]
+    };
     this.showEditModal = true;
   }
 
@@ -216,9 +220,57 @@ export class PlaceDetailComponent implements OnInit {
     }
   }
 
+  // Upload de nouvelles images vers Supabase
+  async onFilesSelected(event: Event) {
+    if (!this.editingPlace) return;
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) return;
+
+    const files = Array.from(input.files);
+    this.uploadingImages = true;
+    this.uploadError = null;
+
+    try {
+      const newUrls: string[] = [];
+      for (const file of files) {
+        const safeName = file.name.replace(/\s+/g, '-').toLowerCase();
+        const idPart = this.editingPlace.id || 'temp';
+        const path = `${idPart}/${Date.now()}-${safeName}`;
+        const url = await this.supabaseImageService.uploadImage(file, path);
+        if (url) {
+          newUrls.push(url);
+        }
+      }
+
+      this.editingPlace = {
+        ...this.editingPlace,
+        images: [ ...(this.editingPlace.images || []), ...newUrls ]
+      };
+
+      // reset input
+      input.value = '';
+    } catch (err) {
+      console.error('Erreur upload images', err);
+      this.uploadError = "Erreur lors de l'upload des images.";
+    } finally {
+      this.uploadingImages = false;
+    }
+  }
+
+  // Retirer une image de la place (ne supprime pas du stockage Supabase)
+  removeExistingImage(url: string) {
+    if (!this.editingPlace) return;
+    this.editingPlace = {
+      ...this.editingPlace,
+      images: (this.editingPlace.images || []).filter(img => img !== url)
+    };
+  }
+
   closeEditModal() {
     this.showEditModal = false;
     this.editingPlace = null;
+    this.uploadError = null;
+    this.uploadingImages = false;
   }
 
   // Sauvegarde Firestore + refresh des données
@@ -229,7 +281,12 @@ export class PlaceDetailComponent implements OnInit {
 
     const id = this.editingPlace.id;
     const payload: Partial<Place> = {
-      ...this.editingPlace,
+      name: this.editingPlace.name,
+      description: this.editingPlace.description,
+      latitude: this.editingPlace.latitude,
+      longitude: this.editingPlace.longitude,
+      categories: this.editingPlace.categories || [],
+      images: this.editingPlace.images || [],
       updatedAt: new Date()
     };
 
@@ -253,12 +310,14 @@ export class PlaceDetailComponent implements OnInit {
 EOF
 
 ########################################
-# 3) Template HTML : bouton + modal Tailwind
+# 3) Template HTML : bouton + modal + images
 ########################################
 cat > src/app/features/map/pages/place-detail/place-detail.component.html <<'EOF'
 <div class="min-h-screen bg-gray-50 pb-12" *ngIf="place$ | async as place; else loading">
+
   <!-- Hero -->
   <div class="relative h-64 md:h-96 w-full bg-gray-800 overflow-hidden">
+    <!-- Image principale -->
     <img *ngIf="place.images && place.images.length > 0"
          [src]="place.images[0]"
          class="w-full h-full object-cover opacity-70"
@@ -324,9 +383,23 @@ cat > src/app/features/map/pages/place-detail/place-detail.component.html <<'EOF
             {{ place.description || 'Aucune description pour l’instant.' }}
           </p>
         </div>
+
+        <!-- Galerie -->
+        <div *ngIf="place.images && place.images.length > 1"
+             class="bg-white rounded-2xl shadow-sm p-6">
+          <h3 class="text-lg font-semibold text-gray-800 mb-3">
+            Galerie photos
+          </h3>
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <img *ngFor="let img of place.images"
+                 [src]="img"
+                 class="w-full h-32 md:h-40 object-cover rounded-xl border border-gray-200 hover:opacity-90 transition"
+                 alt="Photo de {{ place.name }}">
+          </div>
+        </div>
       </div>
 
-      <!-- Colonne latérale (carte + infos) -->
+      <!-- Colonne latérale (carte + actions) -->
       <div class="space-y-6">
         <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
           <div class="px-4 py-3 bg-blue-50 border-b border-blue-100">
@@ -341,17 +414,17 @@ cat > src/app/features/map/pages/place-detail/place-detail.component.html <<'EOF
           </div>
           <div class="p-4 bg-gray-50 text-xs text-gray-600 flex flex-col gap-1">
             <div>
-              <span class="font-semibold">Latitude :</span> {{ place.latitude }}
+              <span class="font-semibold">Latitude :</span> {{ place.latitude | number:'1.4-4' }}
             </div>
             <div>
-              <span class="font-semibold">Longitude :</span> {{ place.longitude }}
+              <span class="font-semibold">Longitude :</span> {{ place.longitude | number:'1.4-4' }}
             </div>
           </div>
         </div>
 
         <!-- Lien Google Maps -->
         <a class="block w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-3 rounded-lg shadow flex items-center justify-center gap-2"
-           [href]="'https://www.google.com/maps?q=' + place.latitude + ',' + place.longitude"
+           [href]="'https://www.google.com/maps/search/?api=1&query=' + place.latitude + ',' + place.longitude"
            target="_blank"
            rel="noopener noreferrer">
           🗺️ Y aller (Google Maps)
@@ -370,7 +443,7 @@ cat > src/app/features/map/pages/place-detail/place-detail.component.html <<'EOF
 
 <!-- 🟡 MODAL EDIT PLACE (ADMIN) -->
 <div *ngIf="showEditModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-  <div class="bg-white w-full max-w-lg mx-4 rounded-2xl shadow-xl flex flex-col max-h-[90vh]">
+  <div class="bg-white w-full max-w-xl mx-4 rounded-2xl shadow-xl flex flex-col max-h-[90vh]">
     <div class="px-6 py-4 border-b flex items-center justify-between">
       <h2 class="text-lg font-semibold text-gray-900">
         Modifier cette place
@@ -441,6 +514,41 @@ cat > src/app/features/map/pages/place-detail/place-detail.component.html <<'EOF
         </div>
       </div>
 
+      <!-- Images existantes -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">Images existantes</label>
+        <div *ngIf="form.images && form.images.length > 0; else noImages" class="grid grid-cols-3 gap-3">
+          <div *ngFor="let img of form.images" class="relative group">
+            <img [src]="img"
+                 class="w-full h-24 object-cover rounded-lg border border-gray-200">
+            <button type="button"
+                    (click)="removeExistingImage(img)"
+                    class="absolute top-1 right-1 text-[10px] px-2 py-1 rounded-full bg-black/70 text-white opacity-0 group-hover:opacity-100 transition">
+              Supprimer
+            </button>
+          </div>
+        </div>
+        <ng-template #noImages>
+          <p class="text-xs text-gray-500 italic">Aucune image pour l’instant.</p>
+        </ng-template>
+      </div>
+
+      <!-- Ajout de nouvelles images -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">Ajouter des images</label>
+        <input
+          type="file"
+          multiple
+          (change)="onFilesSelected($event)"
+          class="block w-full text-xs text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-yellow-50 file:text-yellow-700 hover:file:bg-yellow-100">
+        <div *ngIf="uploadingImages" class="mt-2 text-xs text-blue-600">
+          Upload en cours...
+        </div>
+        <div *ngIf="uploadError" class="mt-2 text-xs text-red-600">
+          {{ uploadError }}
+        </div>
+      </div>
+
       <div class="flex justify-end gap-3 pt-2">
         <button type="button"
                 (click)="closeEditModal()"
@@ -458,5 +566,4 @@ cat > src/app/features/map/pages/place-detail/place-detail.component.html <<'EOF
 </div>
 EOF
 
-echo "✅ Patch terminé : bouton 'Modifier cette Place' + modal admin ajoutés."
-echo "▶ Lance:  npm run start  (ou ng serve) et teste la page de détail."
+echo "✅ Patch terminé : édition complète de la place + gestion des images pour admin."

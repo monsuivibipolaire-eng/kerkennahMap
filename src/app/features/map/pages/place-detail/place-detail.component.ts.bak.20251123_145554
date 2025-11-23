@@ -2,14 +2,13 @@ import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, RouterModule } from '@angular/router';
 import { LeafletModule } from '@bluehalo/ngx-leaflet';
+import { FormsModule } from '@angular/forms';
 import * as L from 'leaflet';
 import { Observable, of } from 'rxjs';
 import { switchMap, tap } from 'rxjs/operators';
 import { PlacesService } from '../../../../core/services/places.service';
 import { Place } from '../../../../core/models/place.model';
-import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../../../core/services/auth.service';
-import { SupabaseImageService } from '../../../../core/services/supabase-image.service';
 
 @Component({
   selector: 'app-place-detail',
@@ -22,7 +21,6 @@ export class PlaceDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private placesService = inject(PlacesService);
   private authService = inject(AuthService);
-  private supabaseImageService = inject(SupabaseImageService);
 
   place$: Observable<Place | undefined> = of(undefined);
 
@@ -33,7 +31,7 @@ export class PlaceDetailComponent implements OnInit {
   showEditModal = false;
   editingPlace: Place | null = null;
 
-  // Catégories proposées
+  // Quelques catégories proposées (tu peux adapter)
   availableCategories: string[] = [
     'café',
     'restaurant',
@@ -43,16 +41,10 @@ export class PlaceDetailComponent implements OnInit {
     'hébergement'
   ];
 
-  // Upload images
-  uploadingImages = false;
-  uploadError: string | null = null;
-
   // Options de carte
   mapOptions: L.MapOptions = {
     layers: [
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 18
-      })
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 })
     ],
     zoom: 14,
     center: L.latLng(34.71, 11.15)
@@ -80,8 +72,7 @@ export class PlaceDetailComponent implements OnInit {
   ngOnInit(): void {
     // 1) Savoir si l'utilisateur est admin
     this.authService.user$.subscribe(user => {
-      const roles = (user as any)?.roles;
-      this.isAdmin = !!roles && Array.isArray(roles) && roles.includes('admin');
+      this.isAdmin = !!user && Array.isArray(user.roles) && user.roles.includes('admin');
     });
 
     // 2) Charger la place depuis l'ID de l'URL
@@ -116,12 +107,7 @@ export class PlaceDetailComponent implements OnInit {
 
   // Ouvre la modal avec une copie de la place
   openEditModal(place: Place) {
-    this.uploadError = null;
-    this.editingPlace = {
-      ...place,
-      images: [...(place.images || [])],
-      categories: [...(place.categories || [])]
-    };
+    this.editingPlace = { ...place };
     this.showEditModal = true;
   }
 
@@ -147,57 +133,9 @@ export class PlaceDetailComponent implements OnInit {
     }
   }
 
-  // Upload de nouvelles images vers Supabase
-  async onFilesSelected(event: Event) {
-    if (!this.editingPlace) return;
-    const input = event.target as HTMLInputElement;
-    if (!input.files || input.files.length === 0) return;
-
-    const files = Array.from(input.files);
-    this.uploadingImages = true;
-    this.uploadError = null;
-
-    try {
-      const newUrls: string[] = [];
-      for (const file of files) {
-        const safeName = file.name.replace(/\s+/g, '-').toLowerCase();
-        const idPart = this.editingPlace.id || 'temp';
-        const path = `${idPart}/${Date.now()}-${safeName}`;
-        const url = await this.supabaseImageService.uploadImage(file, path);
-        if (url) {
-          newUrls.push(url);
-        }
-      }
-
-      this.editingPlace = {
-        ...this.editingPlace,
-        images: [ ...(this.editingPlace.images || []), ...newUrls ]
-      };
-
-      // reset input
-      input.value = '';
-    } catch (err) {
-      console.error('Erreur upload images', err);
-      this.uploadError = "Erreur lors de l'upload des images.";
-    } finally {
-      this.uploadingImages = false;
-    }
-  }
-
-  // Retirer une image de la place (ne supprime pas du stockage Supabase)
-  removeExistingImage(url: string) {
-    if (!this.editingPlace) return;
-    this.editingPlace = {
-      ...this.editingPlace,
-      images: (this.editingPlace.images || []).filter(img => img !== url)
-    };
-  }
-
   closeEditModal() {
     this.showEditModal = false;
     this.editingPlace = null;
-    this.uploadError = null;
-    this.uploadingImages = false;
   }
 
   // Sauvegarde Firestore + refresh des données
@@ -208,12 +146,7 @@ export class PlaceDetailComponent implements OnInit {
 
     const id = this.editingPlace.id;
     const payload: Partial<Place> = {
-      name: this.editingPlace.name,
-      description: this.editingPlace.description,
-      latitude: this.editingPlace.latitude,
-      longitude: this.editingPlace.longitude,
-      categories: this.editingPlace.categories || [],
-      images: this.editingPlace.images || [],
+      ...this.editingPlace,
       updatedAt: new Date()
     };
 
