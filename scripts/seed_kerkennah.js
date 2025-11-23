@@ -1,52 +1,61 @@
+console.log('🚀 seed_kerkennah.js – version debug 1');
+
 const { createClient } = require('@supabase/supabase-js');
 const admin = require('firebase-admin');
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
-const sharp = require('sharp'); // ✅ AJOUT : pour compresser/redimensionner les images
+const sharp = require('sharp');
 
 // =============================================================================
-// 1. CONFIGURATION
+// 1. CONFIGURATION ET AUTHENTIFICATION (CORRIGÉ)
 // =============================================================================
 
 const SUPABASE_URL = 'https://bcuxfuqgwoqyammgmpjw.supabase.co';
-const SUPABASE_KEY = 'sb_secret_GnRXdBMwhJqpO4LZGKfwKg_HbVpIYjh';
+const SUPABASE_KEY = 'sb_secret_GnRXdBMwhJqpO4LZGKfwKg_HbVpIYjh'; // ⚠️ Attention, ne jamais commiter ceci dans un repo public
 const BUCKET_NAME = process.env.BUCKET_NAME || 'places-images';
 
+// Chargement robuste de la clé de service
 const serviceAccountPath = path.join(__dirname, 'serviceAccountKey.json');
+
 if (!fs.existsSync(serviceAccountPath)) {
-  console.error('❌ Manque serviceAccountKey.json dans le dossier du script.');
+  console.error(`❌ ERREUR CRITIQUE: Le fichier serviceAccountKey.json est introuvable ici : ${serviceAccountPath}`);
   process.exit(1);
 }
 
 const serviceAccount = require(serviceAccountPath);
-admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
-const db = admin.firestore();
 
+// Initialisation Firebase avec forcage du projectId pour éviter l'erreur UNAUTHENTICATED
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+    projectId: serviceAccount.project_id // ✅ On force explicitement l'ID du projet
+  });
+}
+
+const db = admin.firestore();
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // =============================================================================
-// 2. CHARGER LE JSON KERKENNAH_LIEUX_REELLES
+// 2. CHARGER LE JSON
 // =============================================================================
 
 const jsonPath = path.join(__dirname, 'kerkennah_lieux.json');
 if (!fs.existsSync(jsonPath)) {
-  console.error('❌ Manque kerkennah_lieux_reelles.json dans le dossier du script.');
+  console.error('❌ Manque kerkennah_lieux.json dans le dossier du script.');
   process.exit(1);
 }
 
 const kerkennahLieux = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
-console.log(`✅ Chargé ${kerkennahLieux.length} lieux depuis kerkennah_lieux_reelles.json\n`);
+console.log(`✅ Chargé ${kerkennahLieux.length} lieux depuis kerkennah_lieux.json\n`);
 
 // =============================================================================
-// 3. TRANSFORMER LE JSON EN FORMAT COMPATIBLE AVEC FIRESTORE
+// 3. TRANSFORMER LE JSON
 // =============================================================================
 
 function transformLieuToPlace(lieu) {
-  const slug = lieu.id;
-  
   return {
-    slug,
+    slug: lieu.id,
     name: lieu.name,
     desc: lieu.description,
     lat: lieu.latitude,
@@ -60,7 +69,7 @@ function transformLieuToPlace(lieu) {
 const places = kerkennahLieux.map(transformLieuToPlace);
 
 // =============================================================================
-// 4. FONCTION POUR TÉLÉCHARGER + COMPRESSER UNE IMAGE
+// 4. FONCTION DOWNLOAD + UPLOAD
 // =============================================================================
 
 function randomFileName(slug) {
@@ -74,29 +83,16 @@ async function downloadImageFromUrl(placeSlug, imageUrl, imageIndex) {
     
     const response = await axios.get(imageUrl, { 
       responseType: 'arraybuffer',
-      headers: {
-        'User-Agent': 'Kerkennah-Map-Bot (kerkennah.app)'
-      },
+      headers: { 'User-Agent': 'Kerkennah-Map-Bot' },
       timeout: 30000
     });
 
-    // ✅ 1) On récupère le buffer original
     const originalBuffer = Buffer.from(response.data);
 
-    // ✅ 2) On COMPRESSE + REDIMENSIONNE avant upload
-    // - rotate() : corrige orientation EXIF
-    // - resize() : max 1600px de large, sans agrandir les petites images
-    // - jpeg({ quality: 70 }) : baisse la qualité (70% ~ très correct visuellement)
     const optimizedBuffer = await sharp(originalBuffer)
       .rotate()
-      .resize({
-        width: 1600,
-        withoutEnlargement: true
-      })
-      .jpeg({
-        quality: 70,
-        mozjpeg: true
-      })
+      .resize({ width: 1600, withoutEnlargement: true })
+      .jpeg({ quality: 70, mozjpeg: true })
       .toBuffer();
 
     const fileName = randomFileName(placeSlug);
@@ -105,20 +101,17 @@ async function downloadImageFromUrl(placeSlug, imageUrl, imageIndex) {
       .from(BUCKET_NAME)
       .upload(fileName, optimizedBuffer, {
         contentType: 'image/jpeg',
-        cacheControl: '31536000', // optionnel mais bon pour les perfs
+        cacheControl: '31536000',
         upsert: false
       });
 
-    if (uploadError) {
-      console.error('      ❌ Erreur upload Supabase:', uploadError.message);
-      throw uploadError;
-    }
+    if (uploadError) throw uploadError;
 
     const { data } = supabase.storage.from(BUCKET_NAME).getPublicUrl(fileName);
-    console.log(`      ✅ Upload OK (compressé)`);
+    console.log(`      ✅ Upload OK`);
     return data.publicUrl;
   } catch (err) {
-    console.error(`      ⚠️ Erreur: ${err.message}`);
+    console.error(`      ⚠️ Erreur image: ${err.message}`);
     return null;
   }
 }
@@ -137,11 +130,11 @@ async function createPlaceDoc(place, imagesUrls) {
     phone: place.phone,
     status: 'approved',
     images: imagesUrls.filter(url => url !== null),
-    createdAt: new Date(),
+    createdAt: admin.firestore.Timestamp.now(), // ✅ Utilisation du timestamp natif Firestore
     createdBy: 'kerkennah_seed_real_images'
   };
 
-  await db.collection('places').doc(place.slug).set(payload, { merge: false });
+  await db.collection('places').doc(place.slug).set(payload, { merge: true });
 }
 
 // =============================================================================
@@ -153,64 +146,31 @@ async function run() {
 
   let successCount = 0;
   let errorCount = 0;
-  let totalImages = 0;
-  let uploadedImages = 0;
 
   for (const place of places) {
     try {
       console.log(`\n=== ${place.name} [${place.slug}] ===`);
-
       const imagesUrls = [];
 
-      // Télécharger toutes les images du lieu (6 par défaut)
-      if (place.imageUrls && place.imageUrls.length > 0) {
+      if (place.imageUrls?.length > 0) {
         for (let i = 0; i < place.imageUrls.length; i++) {
-          const url = place.imageUrls[i];
-          totalImages++;
-          const publicUrl = await downloadImageFromUrl(place.slug, url, i + 1);
-          
-          if (publicUrl) {
-            imagesUrls.push(publicUrl);
-            uploadedImages++;
-          }
-          
-          // Petit délai entre les téléchargements
-          if (i < place.imageUrls.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 400));
-          }
+          const url = await downloadImageFromUrl(place.slug, place.imageUrls[i], i + 1);
+          if (url) imagesUrls.push(url);
+          if (i < place.imageUrls.length - 1) await new Promise(r => setTimeout(r, 400));
         }
-      } else {
-        console.warn(`   ⚠️ Aucune image pour ce lieu`);
       }
 
-      if (imagesUrls.length === 0) {
-        console.warn(`   ⚠️ Aucune image n'a pu être téléchargée`);
-      }
-
-      // Créer le document Firestore
       await createPlaceDoc(place, imagesUrls);
-      console.log(`   ✅ Document Firestore créé (${imagesUrls.length}/${place.imageUrls.length} images)`);
+      console.log(`   ✅ Firestore OK (${imagesUrls.length} images)`);
       successCount++;
     } catch (err) {
-      console.error(`   ❌ Erreur: ${err.message}`);
+      console.error(`   ❌ Erreur Firestore: ${err.message}`);
       errorCount++;
     }
-
-    // Délai entre chaque lieu
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(r => setTimeout(r, 1000));
   }
 
-  console.log(`\n${'='.repeat(60)}`);
-  console.log(`🎉 Seed Kerkennah terminé !`);
-  console.log(`${'='.repeat(60)}`);
-  console.log(`✅ Lieux importés: ${successCount}/${places.length}`);
-  console.log(`❌ Erreurs: ${errorCount}/${places.length}`);
-  console.log(`📸 Images uploadées: ${uploadedImages}/${totalImages}`);
-  
-  if (errorCount === 0 && uploadedImages > 0) {
-    console.log(`\n✨ Tous les lieux ont été importés avec succès !`);
-    console.log(`📍 ${successCount} lieux avec ${uploadedImages} images réelles\n`);
-  }
+  console.log(`\nTerminé: ${successCount} succès, ${errorCount} erreurs.`);
 }
 
 run().catch((err) => {
