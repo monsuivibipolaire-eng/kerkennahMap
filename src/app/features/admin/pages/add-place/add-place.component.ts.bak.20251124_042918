@@ -25,11 +25,12 @@ export class AddPlaceComponent implements OnInit {
     latitude: 34.71,
     longitude: 11.15,
     categories: [],
+    status: 'pending',
     images: [],
-    videos: [],
-    status: 'pending'
+    videos: []
   };
 
+  // Liste de catégories enrichie
   categoriesList: string[] = [
     'Restaurant',
     'Fruits de mer',
@@ -87,6 +88,7 @@ export class AddPlaceComponent implements OnInit {
     private auth: AuthService,
     private router: Router
   ) {
+    // Fix Leaflet icons
     const iconRetinaUrl =
       'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png';
     const iconUrl =
@@ -151,21 +153,27 @@ export class AddPlaceComponent implements OnInit {
   // Upload d'IMAGES
   async onImagesSelected(event: Event) {
     const input = event.target as HTMLInputElement;
-    if (!input.files || input.files.length === 0) return;
+    if (!input.files || input.files.length === 0) {
+      return;
+    }
 
     const files = Array.from(input.files);
     this.uploadingImages = true;
     this.errorMessage = '';
 
     try {
-      if (!this.model.images) this.model.images = [];
+      if (!this.model.images) {
+        this.model.images = [];
+      }
 
       for (const file of files) {
         const safeName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
         const fileName = `${Date.now()}_${safeName}`;
         const path = `images/${fileName}`;
         const url = await this.imageService.uploadImage(file, path);
-        if (url) this.model.images.push(url);
+        if (url) {
+          this.model.images.push(url);
+        }
       }
 
       input.value = '';
@@ -182,21 +190,27 @@ export class AddPlaceComponent implements OnInit {
   // Upload de VIDEOS
   async onVideosSelected(event: Event) {
     const input = event.target as HTMLInputElement;
-    if (!input.files || input.files.length === 0) return;
+    if (!input.files || input.files.length === 0) {
+      return;
+    }
 
     const files = Array.from(input.files);
     this.uploadingVideos = true;
     this.errorMessage = '';
 
     try {
-      if (!this.model.videos) this.model.videos = [];
+      if (!this.model.videos) {
+        this.model.videos = [];
+      }
 
       for (const file of files) {
         const safeName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
         const fileName = `${Date.now()}_${safeName}`;
         const path = `videos/${fileName}`;
         const url = await this.imageService.uploadImage(file, path);
-        if (url) this.model.videos.push(url);
+        if (url) {
+          this.model.videos.push(url);
+        }
       }
 
       input.value = '';
@@ -210,11 +224,13 @@ export class AddPlaceComponent implements OnInit {
     }
   }
 
+  // Supprimer une image de la liste locale
   removeImage(url: string) {
     if (!this.model.images) return;
-    this.model.images = this.model.images.filter(i => i !== url);
+    this.model.images = this.model.images.filter(img => img !== url);
   }
 
+  // Supprimer une vidéo de la liste locale
   removeVideo(url: string) {
     if (!this.model.videos) return;
     this.model.videos = this.model.videos.filter(v => v !== url);
@@ -222,7 +238,9 @@ export class AddPlaceComponent implements OnInit {
 
   // Soumission du formulaire
   async onSubmit(form: NgForm) {
-    if (form.invalid || this.isSubmitting) return;
+    if (form.invalid || this.isSubmitting) {
+      return;
+    }
 
     this.isSubmitting = true;
     this.errorMessage = '';
@@ -236,14 +254,6 @@ export class AddPlaceComponent implements OnInit {
         return;
       }
 
-      const roles = (user as any).roles || [];
-      const isAdmin =
-        Array.isArray(roles) && roles.includes('admin');
-
-      // ✅ Si admin -> approved, sinon -> pending
-      const status: 'pending' | 'approved' | 'rejected' =
-        isAdmin ? 'approved' : 'pending';
-
       const placeData: Place = {
         name: this.model.name!.trim(),
         description: this.model.description!.trim(),
@@ -252,17 +262,14 @@ export class AddPlaceComponent implements OnInit {
         categories: this.model.categories || [],
         images: this.model.images || [],
         videos: this.model.videos || [],
-        status,
+        status: 'pending',
         createdBy: (user as any).uid || (user as any).id || 'unknown',
         createdAt: new Date()
       };
 
       await this.placesService.addPlace(placeData);
 
-      this.successMessage = isAdmin
-        ? 'Lieu ajouté et publié avec succès !'
-        : 'Lieu ajouté ! En attente de validation par un administrateur.';
-
+      this.successMessage = 'Lieu ajouté avec succès !';
       form.resetForm({
         latitude: 34.71,
         longitude: 11.15,

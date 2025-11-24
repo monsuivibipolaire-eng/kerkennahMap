@@ -1,0 +1,30 @@
+<div class="container mx-auto p-6">
+  <h1 class="text-3xl font-bold text-blue-900 mb-8">Administration</h1>
+
+  <div class="card">
+    <h2 class="text-xl font-semibold mb-4">Outils de Développement</h2>
+    <p class="text-gray-600 mb-4">
+      Utilisez ce bouton pour remplir votre base de données avec 10 lieux emblématiques de Kerkennah.
+      (Images Wikimedia/Publiques).
+    </p>
+    
+    <div class="flex items-center gap-4">
+      <button (click)="seedDatabase()" 
+              [disabled]="isLoading"
+              class="btn-seed disabled:opacity-50 disabled:cursor-not-allowed">
+        <span *ngIf="!isLoading">🌱 Injecter les Données de Test</span>
+        <span *ngIf="isLoading">Injection en cours...</span>
+      </button>
+      
+      <span *ngIf="message" class="font-medium" 
+            [ngClass]="{'text-green-600': message.includes('Succès'), 'text-red-600': message.includes('Erreur')}">
+        {{ message }}
+      </span>
+    </div>
+  </div>
+
+  <!-- Ici, on pourrait afficher la liste réelle des lieux pour les modérer plus tard -->
+  <div class="mt-8 text-gray-400 text-center italic">
+    (La liste de modération sera développée ultérieurement)
+  </div>
+</div>

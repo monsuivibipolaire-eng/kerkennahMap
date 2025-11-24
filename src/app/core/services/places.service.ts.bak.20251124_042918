@@ -22,57 +22,41 @@ export class PlacesService {
 
   constructor() {}
 
-  // 🔵 Lieux publiés (status = 'approved')
+  // Récupérer tous les lieux approuvés
   getApprovedPlaces(): Observable<Place[]> {
     const placesRef = collection(this.firestore, 'places');
     const q = query(placesRef, where('status', '==', 'approved'));
     return collectionData(q, { idField: 'id' }) as Observable<Place[]>;
   }
 
-  // 📍 Un lieu par son ID
+  // Récupérer un lieu par son ID
   getPlaceById(id: string): Observable<Place | undefined> {
     const placeDocRef = doc(this.firestore, `places/${id}`);
     return docData(placeDocRef, { idField: 'id' }) as Observable<Place>;
   }
 
-  // ➕ Ajouter un lieu
-  addPlace(place: Place): Promise<any> {
-    const placesRef = collection(this.firestore, 'places');
-    return addDoc(placesRef, place);
-  }
-
-  // ✏️ Mise à jour générique
+  // Mettre à jour un lieu existant
   updatePlace(id: string, data: Partial<Place>): Promise<void> {
     const placeDocRef = doc(this.firestore, `places/${id}`);
     return updateDoc(placeDocRef, data as any);
   }
 
-  // 🟥 Supprimer un lieu
+  // Supprimer un lieu
   deletePlace(id: string): Promise<void> {
     const placeDocRef = doc(this.firestore, `places/${id}`);
     return deleteDoc(placeDocRef);
   }
 
-  // 🕒 Lieux en attente de validation
+  // Ajouter un nouveau lieu
+  addPlace(place: Place): Promise<any> {
+    const placesRef = collection(this.firestore, 'places');
+    return addDoc(placesRef, place);
+  }
+
+  // Admin: Récupérer les lieux en attente
   getPendingPlaces(): Observable<Place[]> {
     const placesRef = collection(this.firestore, 'places');
     const q = query(placesRef, where('status', '==', 'pending'));
     return collectionData(q, { idField: 'id' }) as Observable<Place[]>;
-  }
-
-  // ✅ Valider / approuver un lieu
-  approvePlace(id: string): Promise<void> {
-    return this.updatePlace(id, {
-      status: 'approved',
-      updatedAt: new Date()
-    });
-  }
-
-  // ❌ Rejeter un lieu
-  rejectPlace(id: string): Promise<void> {
-    return this.updatePlace(id, {
-      status: 'rejected',
-      updatedAt: new Date()
-    });
   }
 }
