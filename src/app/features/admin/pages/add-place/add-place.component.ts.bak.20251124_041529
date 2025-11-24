@@ -18,7 +18,7 @@ import { firstValueFrom } from 'rxjs';
   styleUrls: ['./add-place.component.css']
 })
 export class AddPlaceComponent implements OnInit {
-  // Modèle de base du formulaire
+  // Modèle du formulaire
   model: Partial<Place> = {
     name: '',
     description: '',
@@ -26,11 +26,10 @@ export class AddPlaceComponent implements OnInit {
     longitude: 11.15,
     categories: [],
     status: 'pending',
-    images: [],
-    videos: []
+    images: []
   };
 
-  // Liste de catégories enrichie
+  // ✅ Liste de catégories riche
   categoriesList: string[] = [
     'Restaurant',
     'Fruits de mer',
@@ -65,8 +64,7 @@ export class AddPlaceComponent implements OnInit {
   ];
 
   isSubmitting = false;
-  uploadingImages = false;
-  uploadingVideos = false;
+  uploadingImage = false;
   errorMessage = '';
   successMessage = '';
 
@@ -80,7 +78,7 @@ export class AddPlaceComponent implements OnInit {
     center: L.latLng(34.71, 11.15)
   };
 
-  marker: L.Marker | null = null;
+  private marker: L.Marker | null = null;
 
   constructor(
     private placesService: PlacesService,
@@ -88,7 +86,7 @@ export class AddPlaceComponent implements OnInit {
     private auth: AuthService,
     private router: Router
   ) {
-    // Fix Leaflet icons
+    // Fix des icônes Leaflet
     const iconRetinaUrl =
       'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png';
     const iconUrl =
@@ -96,7 +94,7 @@ export class AddPlaceComponent implements OnInit {
     const shadowUrl =
       'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png';
 
-    (L.Marker.prototype as any).options.icon = L.icon({
+    L.Marker.prototype.options.icon = L.icon({
       iconRetinaUrl,
       iconUrl,
       shadowUrl,
@@ -120,7 +118,7 @@ export class AddPlaceComponent implements OnInit {
     });
   }
 
-  updateMarker(lat: number, lng: number) {
+  private updateMarker(lat: number, lng: number) {
     if (this.marker) {
       this.marker.setLatLng([lat, lng]);
     } else {
@@ -132,7 +130,7 @@ export class AddPlaceComponent implements OnInit {
     return this.marker ? [this.marker] : [];
   }
 
-  // Catégories (checkbox)
+  // ✅ Gestion des catégories (checkbox)
   toggleCategory(cat: string, event: Event) {
     const input = event.target as HTMLInputElement;
     const checked = input.checked;
@@ -150,15 +148,16 @@ export class AddPlaceComponent implements OnInit {
     }
   }
 
-  // Upload d'IMAGES
-  async onImagesSelected(event: Event) {
+  // ✅ Upload MULTIPLE images vers Supabase
+  async onFileSelected(event: Event) {
     const input = event.target as HTMLInputElement;
     if (!input.files || input.files.length === 0) {
       return;
     }
 
     const files = Array.from(input.files);
-    this.uploadingImages = true;
+
+    this.uploadingImage = true;
     this.errorMessage = '';
 
     try {
@@ -169,74 +168,34 @@ export class AddPlaceComponent implements OnInit {
       for (const file of files) {
         const safeName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
         const fileName = `${Date.now()}_${safeName}`;
-        const path = `images/${fileName}`;
+        const path = `places/${fileName}`;
+
+        console.log('📤 Upload image:', path);
         const url = await this.imageService.uploadImage(file, path);
         if (url) {
           this.model.images.push(url);
         }
       }
 
+      // reset input
       input.value = '';
     } catch (err: any) {
-      console.error('Upload images failed', err);
+      console.error('Upload failed', err);
       this.errorMessage =
         "Erreur lors de l'upload des images : " +
         (err?.message || 'Vérifiez votre configuration Supabase');
     } finally {
-      this.uploadingImages = false;
+      this.uploadingImage = false;
     }
   }
 
-  // Upload de VIDEOS
-  async onVideosSelected(event: Event) {
-    const input = event.target as HTMLInputElement;
-    if (!input.files || input.files.length === 0) {
-      return;
-    }
-
-    const files = Array.from(input.files);
-    this.uploadingVideos = true;
-    this.errorMessage = '';
-
-    try {
-      if (!this.model.videos) {
-        this.model.videos = [];
-      }
-
-      for (const file of files) {
-        const safeName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
-        const fileName = `${Date.now()}_${safeName}`;
-        const path = `videos/${fileName}`;
-        const url = await this.imageService.uploadImage(file, path);
-        if (url) {
-          this.model.videos.push(url);
-        }
-      }
-
-      input.value = '';
-    } catch (err: any) {
-      console.error('Upload videos failed', err);
-      this.errorMessage =
-        "Erreur lors de l'upload des vidéos : " +
-        (err?.message || 'Vérifiez votre configuration Supabase');
-    } finally {
-      this.uploadingVideos = false;
-    }
-  }
-
-  // Supprimer une image de la liste locale
+  // ✅ Supprimer une image du formulaire (ne supprime pas dans Supabase)
   removeImage(url: string) {
     if (!this.model.images) return;
     this.model.images = this.model.images.filter(img => img !== url);
   }
 
-  // Supprimer une vidéo de la liste locale
-  removeVideo(url: string) {
-    if (!this.model.videos) return;
-    this.model.videos = this.model.videos.filter(v => v !== url);
-  }
-
-  // Soumission du formulaire
+  // ✅ Soumission du formulaire
   async onSubmit(form: NgForm) {
     if (form.invalid || this.isSubmitting) {
       return;
@@ -261,7 +220,6 @@ export class AddPlaceComponent implements OnInit {
         longitude: this.model.longitude!,
         categories: this.model.categories || [],
         images: this.model.images || [],
-        videos: this.model.videos || [],
         status: 'pending',
         createdBy: (user as any).uid || (user as any).id || 'unknown',
         createdAt: new Date()
@@ -274,15 +232,13 @@ export class AddPlaceComponent implements OnInit {
         latitude: 34.71,
         longitude: 11.15,
         categories: [],
-        images: [],
-        videos: []
+        images: []
       });
       this.model = {
         latitude: 34.71,
         longitude: 11.15,
         categories: [],
         images: [],
-        videos: [],
         status: 'pending'
       };
       this.updateMarker(34.71, 11.15);
