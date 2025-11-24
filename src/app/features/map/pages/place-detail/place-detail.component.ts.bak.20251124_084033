@@ -1,6 +1,6 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ActivatedRoute, RouterModule, Router } from '@angular/router';
+import { ActivatedRoute, RouterModule } from '@angular/router';
 import { LeafletModule } from '@bluehalo/ngx-leaflet';
 import * as L from 'leaflet';
 import { Observable, of } from 'rxjs';
@@ -21,7 +21,6 @@ import { SupabaseImageService } from '../../../../core/services/supabase-image.s
 })
 export class PlaceDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
-  private router = inject(Router);
   private placesService = inject(PlacesService);
   private authService = inject(AuthService);
   private supabaseImageService = inject(SupabaseImageService);
@@ -309,25 +308,6 @@ export class PlaceDetailComponent implements OnInit {
       );
     } catch (err) {
       console.error('Erreur lors de la mise à jour de la place', err);
-    }
-  }
-
-  // -------- SUPPRESSION --------
-
-  async onDeletePlace(place: Place) {
-    if (!this.isAdmin || !place.id) return;
-
-    const ok = window.confirm(
-      'Êtes-vous sûr de vouloir supprimer définitivement ce lieu ?'
-    );
-    if (!ok) return;
-
-    try {
-      await this.placesService.deletePlace(place.id);
-      this.router.navigate(['/']);
-    } catch (err) {
-      console.error('Erreur lors de la suppression du lieu', err);
-      alert("Erreur lors de la suppression du lieu.");
     }
   }
 }

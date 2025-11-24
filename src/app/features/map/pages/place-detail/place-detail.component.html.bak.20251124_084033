@@ -31,7 +31,7 @@
             {{ place.name }}
           </h1>
 
-          <!-- Boutons (ADMIN uniquement) -->
+          <!-- Bouton Modifier (ADMIN uniquement) -->
           <div class="flex items-center gap-2 md:ml-auto" *ngIf="isAdmin">
             <button
               type="button"
@@ -39,14 +39,6 @@
               class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-yellow-400 text-gray-900 text-xs md:text-sm font-semibold shadow-lg hover:bg-yellow-300 transition"
             >
               ✏️ Modifier
-            </button>
-
-            <button
-              type="button"
-              (click)="onDeletePlace(place)"
-              class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-red-600 text-white text-xs md:text-sm font-semibold shadow-lg hover:bg-red-500 transition"
-            >
-              🗑️ Supprimer
             </button>
           </div>
         </div>

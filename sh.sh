@@ -17,7 +17,7 @@ echo "📦 Backup des fichiers place-detail..."
 cat > "$TS_FILE" <<'EOF'
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ActivatedRoute, RouterModule } from '@angular/router';
+import { ActivatedRoute, RouterModule, Router } from '@angular/router';
 import { LeafletModule } from '@bluehalo/ngx-leaflet';
 import * as L from 'leaflet';
 import { Observable, of } from 'rxjs';
@@ -38,6 +38,7 @@ import { SupabaseImageService } from '../../../../core/services/supabase-image.s
 })
 export class PlaceDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
   private placesService = inject(PlacesService);
   private authService = inject(AuthService);
   private supabaseImageService = inject(SupabaseImageService);
@@ -327,6 +328,25 @@ export class PlaceDetailComponent implements OnInit {
       console.error('Erreur lors de la mise à jour de la place', err);
     }
   }
+
+  // -------- SUPPRESSION --------
+
+  async onDeletePlace(place: Place) {
+    if (!this.isAdmin || !place.id) return;
+
+    const ok = window.confirm(
+      'Êtes-vous sûr de vouloir supprimer définitivement ce lieu ?'
+    );
+    if (!ok) return;
+
+    try {
+      await this.placesService.deletePlace(place.id);
+      this.router.navigate(['/']);
+    } catch (err) {
+      console.error('Erreur lors de la suppression du lieu', err);
+      alert("Erreur lors de la suppression du lieu.");
+    }
+  }
 }
 EOF
 
@@ -367,7 +387,7 @@ cat > "$HTML_FILE" <<'EOF'
             {{ place.name }}
           </h1>
 
-          <!-- Bouton Modifier (ADMIN uniquement) -->
+          <!-- Boutons (ADMIN uniquement) -->
           <div class="flex items-center gap-2 md:ml-auto" *ngIf="isAdmin">
             <button
               type="button"
@@ -375,6 +395,14 @@ cat > "$HTML_FILE" <<'EOF'
               class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-yellow-400 text-gray-900 text-xs md:text-sm font-semibold shadow-lg hover:bg-yellow-300 transition"
             >
               ✏️ Modifier
+            </button>
+
+            <button
+              type="button"
+              (click)="onDeletePlace(place)"
+              class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-red-600 text-white text-xs md:text-sm font-semibold shadow-lg hover:bg-red-500 transition"
+            >
+              🗑️ Supprimer
             </button>
           </div>
         </div>
@@ -672,6 +700,4 @@ cat > "$HTML_FILE" <<'EOF'
 </div>
 EOF
 
-echo "✅ Patch appliqué :"
-echo "  - Édition détail lieu : upload + suppression IMAGES & VIDEOS"
-echo "  - Affichage des vidéos sur la page détail"
+echo "✅ Patch appliqué : suppression de lieu depuis la page détail (admin uniquement)."
