@@ -1,8 +1,15 @@
 <div class="container mx-auto p-6">
+  <!-- Titre différent selon rôle -->
   <h1 class="text-3xl font-bold text-blue-900 mb-6">
-    Administration – Modération des lieux
+    <ng-container *ngIf="isAdmin; else userTitle">
+      Administration – Modération des lieux
+    </ng-container>
+    <ng-template #userTitle>
+      Mes lieux
+    </ng-template>
   </h1>
 
+  <!-- Message global -->
   <div
     *ngIf="message"
     class="mb-4 p-3 rounded border text-sm"
@@ -14,81 +21,162 @@
     {{ message }}
   </div>
 
-  <ng-container *ngIf="pendingPlaces$ | async as pending; else loading">
-    <div *ngIf="pending.length === 0" class="text-gray-500 italic">
-      Aucun lieu en attente de validation pour le moment.
-    </div>
+  <!-- VUE ADMIN : lieux en attente -->
+  <ng-container *ngIf="isAdmin; else userView">
+    <ng-container *ngIf="pendingPlaces$ | async as pending; else loadingAdmin">
+      <div *ngIf="pending.length === 0" class="text-gray-500 italic">
+        Aucun lieu en attente de validation pour le moment.
+      </div>
 
-    <div *ngFor="let place of pending" class="card">
-      <div class="flex flex-col md:flex-row md:items-start gap-4">
-        <div class="flex-1">
-          <div class="flex items-center gap-2 mb-1">
-            <h2 class="text-lg font-semibold text-gray-900">
-              {{ place.name }}
-            </h2>
-            <span class="badge bg-yellow-100 text-yellow-800 border border-yellow-200">
-              En attente
-            </span>
+      <div *ngFor="let place of pending" class="card">
+        <div class="flex flex-col md:flex-row md:items-start gap-4">
+          <div class="flex-1">
+            <div class="flex items-center gap-2 mb-1">
+              <h2 class="text-lg font-semibold text-gray-900">
+                {{ place.name }}
+              </h2>
+              <span class="badge bg-yellow-100 text-yellow-800 border border-yellow-200">
+                En attente
+              </span>
+            </div>
+
+            <p class="text-sm text-gray-600 mb-2">
+              {{ place.description || 'Aucune description.' }}
+            </p>
+
+            <div class="flex flex-wrap gap-2 mb-2">
+              <span
+                *ngFor="let cat of place.categories"
+                class="badge bg-blue-50 text-blue-700 border border-blue-100"
+              >
+                {{ cat }}
+              </span>
+            </div>
+
+            <p class="text-xs text-gray-500">
+              <span class="font-semibold">Position :</span>
+              {{ place.latitude | number : '1.4-4' }},
+              {{ place.longitude | number : '1.4-4' }}
+            </p>
+
+            <p class="text-xs text-gray-400 mt-1">
+              Proposé par :
+              <span class="font-mono">
+                {{ place.createdBy || 'inconnu' }}
+              </span>
+            </p>
           </div>
 
-          <p class="text-sm text-gray-600 mb-2">
-            {{ place.description || 'Aucune description.' }}
-          </p>
-
-          <div class="flex flex-wrap gap-2 mb-2">
-            <span
-              *ngFor="let cat of place.categories"
-              class="badge bg-blue-50 text-blue-700 border border-blue-100"
+          <div class="flex flex-col items-stretch gap-2 md:w-48">
+            <a
+              [routerLink]="['/place', place.id]"
+              class="btn bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 text-center"
             >
-              {{ cat }}
-            </span>
+              👁 Voir la fiche
+            </a>
+
+            <button
+              type="button"
+              (click)="approve(place)"
+              [disabled]="isProcessingId === place.id"
+              class="btn btn-approve disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              ✅ Valider
+            </button>
+
+            <button
+              type="button"
+              (click)="reject(place)"
+              [disabled]="isProcessingId === place.id"
+              class="btn btn-reject disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              ❌ Rejeter
+            </button>
           </div>
-
-          <p class="text-xs text-gray-500">
-            <span class="font-semibold">Position :</span>
-            {{ place.latitude | number : '1.4-4' }},
-            {{ place.longitude | number : '1.4-4' }}
-          </p>
-
-          <p class="text-xs text-gray-400 mt-1">
-            Proposé par :
-            <span class="font-mono">
-              {{ place.createdBy || 'inconnu' }}
-            </span>
-          </p>
-        </div>
-
-        <div class="flex flex-col items-stretch gap-2 md:w-48">
-          <a
-            [routerLink]="['/place', place.id]"
-            class="btn bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 text-center"
-          >
-            👁 Voir la fiche
-          </a>
-
-          <button
-            type="button"
-            (click)="approve(place)"
-            [disabled]="isProcessingId === place.id"
-            class="btn btn-approve disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            ✅ Valider
-          </button>
-
-          <button
-            type="button"
-            (click)="reject(place)"
-            [disabled]="isProcessingId === place.id"
-            class="btn btn-reject disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            ❌ Rejeter
-          </button>
         </div>
       </div>
-    </div>
+    </ng-container>
+
+    <ng-template #loadingAdmin>
+      <div class="text-gray-500 italic">Chargement des lieux en attente...</div>
+    </ng-template>
   </ng-container>
 
-  <ng-template #loading>
-    <div class="text-gray-500 italic">Chargement des lieux en attente...</div>
+  <!-- VUE UTILISATEUR (non admin) : ses lieux -->
+  <ng-template #userView>
+    <ng-container *ngIf="userPlaces$ | async as myPlaces; else loadingUser">
+      <!-- Aucun lieu : bouton Ajouter -->
+      <div *ngIf="myPlaces.length === 0" class="bg-white rounded-lg border border-dashed border-gray-300 p-6 text-center">
+        <p class="text-gray-600 mb-3">
+          Vous n'avez encore ajouté aucun lieu.
+        </p>
+        <a
+          routerLink="/add-place"
+          class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-600 text-white text-sm font-semibold shadow hover:bg-blue-700 transition"
+        >
+          ➕ Ajouter un lieu
+        </a>
+      </div>
+
+      <!-- Liste des lieux ajoutés par l'utilisateur -->
+      <div *ngFor="let place of myPlaces" class="card">
+        <div class="flex flex-col md:flex-row md:items-start gap-4">
+          <div class="flex-1">
+            <div class="flex items-center gap-2 mb-1">
+              <h2 class="text-lg font-semibold text-gray-900">
+                {{ place.name }}
+              </h2>
+              <span
+                class="badge border"
+                [ngClass]="{
+                  'bg-yellow-50 text-yellow-700 border-yellow-200': place.status === 'pending',
+                  'bg-green-50 text-green-700 border-green-200': place.status === 'approved',
+                  'bg-red-50 text-red-700 border-red-200': place.status === 'rejected'
+                }"
+              >
+                <ng-container [ngSwitch]="place.status">
+                  <span *ngSwitchCase="'pending'">En attente</span>
+                  <span *ngSwitchCase="'approved'">Publié</span>
+                  <span *ngSwitchCase="'rejected'">Rejeté</span>
+                  <span *ngSwitchDefault>{{ place.status }}</span>
+                </ng-container>
+              </span>
+            </div>
+
+            <p class="text-sm text-gray-600 mb-2">
+              {{ place.description || 'Aucune description.' }}
+            </p>
+
+            <div class="flex flex-wrap gap-2 mb-2">
+              <span
+                *ngFor="let cat of place.categories"
+                class="badge bg-blue-50 text-blue-700 border border-blue-100"
+              >
+                {{ cat }}
+              </span>
+            </div>
+
+            <p class="text-xs text-gray-500">
+              <span class="font-semibold">Position :</span>
+              {{ place.latitude | number : '1.4-4' }},
+              {{ place.longitude | number : '1.4-4' }}
+            </p>
+          </div>
+
+          <div class="flex flex-col items-stretch gap-2 md:w-48">
+            <a
+              [routerLink]="['/place', place.id]"
+              class="btn bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 text-center"
+            >
+              👁 Voir la fiche
+            </a>
+          </div>
+        </div>
+      </div>
+    </ng-container>
+
+    <ng-template #loadingUser>
+      <div class="text-gray-500 italic">Chargement de vos lieux...</div>
+    </ng-template>
   </ng-template>
 </div>

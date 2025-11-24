@@ -1,10 +1,9 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
-import { Observable, of, firstValueFrom } from 'rxjs';
-
 import { PlacesService } from '../../../../core/services/places.service';
 import { Place } from '../../../../core/models/place.model';
+import { Observable, firstValueFrom } from 'rxjs';
 import { AuthService } from '../../../../core/services/auth.service';
 
 @Component({
@@ -20,51 +19,16 @@ import { AuthService } from '../../../../core/services/auth.service';
     .badge { @apply inline-block text-xs px-2 py-1 rounded-full; }
   `]
 })
-export class AdminListComponent implements OnInit {
+export class AdminListComponent {
   private placesService = inject(PlacesService);
   private authService = inject(AuthService);
 
-  // Pour admins : lieux en attente
-  pendingPlaces$: Observable<Place[]> = of([]);
-
-  // Pour non-admins : leurs propres lieux
-  userPlaces$: Observable<Place[]> = of([]);
-
-  isAdmin = false;
-  currentUserId: string | null = null;
+  pendingPlaces$: Observable<Place[]> =
+    this.placesService.getPendingPlaces();
 
   isProcessingId: string | null = null;
   message = '';
 
-  ngOnInit(): void {
-    this.authService.user$.subscribe(user => {
-      if (!user) {
-        this.isAdmin = false;
-        this.currentUserId = null;
-        this.pendingPlaces$ = of([]);
-        this.userPlaces$ = of([]);
-        return;
-      }
-
-      const roles = (user as any)?.roles;
-      const uid = (user as any)?.uid || (user as any)?.id || null;
-
-      this.currentUserId = uid;
-      this.isAdmin = Array.isArray(roles) && roles.includes('admin');
-
-      if (this.isAdmin) {
-        // 🛡 Admin : voit les lieux en attente
-        this.pendingPlaces$ = this.placesService.getPendingPlaces();
-        this.userPlaces$ = of([]);
-      } else if (uid) {
-        // 👤 Utilisateur normal : voit SES lieux ajoutés
-        this.userPlaces$ = this.placesService.getPlacesByUser(uid);
-        this.pendingPlaces$ = of([]);
-      }
-    });
-  }
-
-  // ✅ Valider un lieu (admin uniquement)
   async approve(place: Place) {
     if (!place.id) return;
 
@@ -78,14 +42,14 @@ export class AdminListComponent implements OnInit {
         (admin as any)?.id ||
         null;
 
-      if (!this.isAdmin || !adminId) {
-        this.message = '❌ Action réservée aux administrateurs.';
+      if (!adminId) {
+        this.message = '❌ Impossible de déterminer votre identité administrateur.';
         this.isProcessingId = null;
         return;
       }
 
       await this.placesService.approvePlace(place.id, adminId);
-      this.message = `✅ Lieu "${place.name}" approuvé.`;
+      this.message = `✅ Lieu "${place.name}" approuvé par ${adminId}.`;
     } catch (err) {
       console.error(err);
       this.message = `❌ Erreur lors de la validation de "${place.name}".`;
@@ -94,10 +58,8 @@ export class AdminListComponent implements OnInit {
     }
   }
 
-  // ❌ Rejeter un lieu (admin uniquement)
   async reject(place: Place) {
     if (!place.id) return;
-
     const confirmReject = window.confirm(
       `Êtes-vous sûr de vouloir rejeter le lieu "${place.name}" ?`
     );
@@ -107,12 +69,6 @@ export class AdminListComponent implements OnInit {
     this.message = '';
 
     try {
-      if (!this.isAdmin) {
-        this.message = '❌ Action réservée aux administrateurs.';
-        this.isProcessingId = null;
-        return;
-      }
-
       await this.placesService.rejectPlace(place.id);
       this.message = `✅ Lieu "${place.name}" rejeté.`;
     } catch (err) {

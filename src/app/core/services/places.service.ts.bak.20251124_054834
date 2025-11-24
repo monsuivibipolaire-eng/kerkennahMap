@@ -29,45 +29,38 @@ export class PlacesService {
     return collectionData(q, { idField: 'id' }) as Observable<Place[]>;
   }
 
-  // Lieu par ID
+  // Récupérer un lieu par ID
   getPlaceById(id: string): Observable<Place | undefined> {
     const placeDocRef = doc(this.firestore, `places/${id}`);
     return docData(placeDocRef, { idField: 'id' }) as Observable<Place>;
   }
 
-  // ➕ Ajouter un lieu
+  // Ajouter un lieu
   addPlace(place: Place): Promise<any> {
     const placesRef = collection(this.firestore, 'places');
     return addDoc(placesRef, place);
   }
 
-  // ✏️ Mise à jour générique
+  // Mettre à jour un lieu
   updatePlace(id: string, data: Partial<Place>): Promise<void> {
     const placeDocRef = doc(this.firestore, `places/${id}`);
     return updateDoc(placeDocRef, data as any);
   }
 
-  // 🗑 Supprimer un lieu
+  // Supprimer un lieu
   deletePlace(id: string): Promise<void> {
     const placeDocRef = doc(this.firestore, `places/${id}`);
     return deleteDoc(placeDocRef);
   }
 
-  // 🕒 Lieux en attente (pour admin)
+  // Lieux en attente
   getPendingPlaces(): Observable<Place[]> {
     const placesRef = collection(this.firestore, 'places');
     const q = query(placesRef, where('status', '==', 'pending'));
     return collectionData(q, { idField: 'id' }) as Observable<Place[]>;
   }
 
-  // 👤 Lieux créés par un utilisateur donné (pour non-admin)
-  getPlacesByUser(userId: string): Observable<Place[]> {
-    const placesRef = collection(this.firestore, 'places');
-    const q = query(placesRef, where('createdBy', '==', userId));
-    return collectionData(q, { idField: 'id' }) as Observable<Place[]>;
-  }
-
-  // ✅ Approuver un lieu (admin)
+  // ✅ Approuver un lieu (on enregistre l'admin)
   approvePlace(id: string, adminId: string): Promise<void> {
     return this.updatePlace(id, {
       status: 'approved',
@@ -77,7 +70,7 @@ export class PlacesService {
     });
   }
 
-  // ❌ Rejeter un lieu (admin)
+  // ❌ Rejeter un lieu
   rejectPlace(id: string): Promise<void> {
     return this.updatePlace(id, {
       status: 'rejected',
