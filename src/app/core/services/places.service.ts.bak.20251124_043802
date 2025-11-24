@@ -22,50 +22,48 @@ export class PlacesService {
 
   constructor() {}
 
-  // Lieux approuvés (affichés sur la carte)
+  // 🔵 Lieux publiés (status = 'approved')
   getApprovedPlaces(): Observable<Place[]> {
     const placesRef = collection(this.firestore, 'places');
     const q = query(placesRef, where('status', '==', 'approved'));
     return collectionData(q, { idField: 'id' }) as Observable<Place[]>;
   }
 
-  // Récupérer un lieu par ID
+  // 📍 Un lieu par son ID
   getPlaceById(id: string): Observable<Place | undefined> {
     const placeDocRef = doc(this.firestore, `places/${id}`);
     return docData(placeDocRef, { idField: 'id' }) as Observable<Place>;
   }
 
-  // Ajouter un lieu
+  // ➕ Ajouter un lieu
   addPlace(place: Place): Promise<any> {
     const placesRef = collection(this.firestore, 'places');
     return addDoc(placesRef, place);
   }
 
-  // Mettre à jour un lieu
+  // ✏️ Mise à jour générique
   updatePlace(id: string, data: Partial<Place>): Promise<void> {
     const placeDocRef = doc(this.firestore, `places/${id}`);
     return updateDoc(placeDocRef, data as any);
   }
 
-  // Supprimer un lieu
+  // 🟥 Supprimer un lieu
   deletePlace(id: string): Promise<void> {
     const placeDocRef = doc(this.firestore, `places/${id}`);
     return deleteDoc(placeDocRef);
   }
 
-  // Lieux en attente
+  // 🕒 Lieux en attente de validation
   getPendingPlaces(): Observable<Place[]> {
     const placesRef = collection(this.firestore, 'places');
     const q = query(placesRef, where('status', '==', 'pending'));
     return collectionData(q, { idField: 'id' }) as Observable<Place[]>;
   }
 
-  // ✅ Approuver un lieu (on enregistre l'admin)
-  approvePlace(id: string, adminId: string): Promise<void> {
+  // ✅ Valider / approuver un lieu
+  approvePlace(id: string): Promise<void> {
     return this.updatePlace(id, {
       status: 'approved',
-      validatedBy: adminId,
-      validatedAt: new Date(),
       updatedAt: new Date()
     });
   }

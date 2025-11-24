@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { RouterModule, Router } from '@angular/router';
 import { Observable } from 'rxjs';
 
+// Imports corrigés (chemins relatifs depuis core/components/header/)
 import { AuthService } from '../../services/auth.service';
 import { User } from '../../models/user.model';
 

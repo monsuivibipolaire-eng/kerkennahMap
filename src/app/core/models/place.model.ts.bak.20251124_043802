@@ -5,12 +5,10 @@ export interface Place {
   latitude: number;
   longitude: number;
   categories: string[];
-  images: string[];      // URLs des images
+  images: string[];      // URLs des images (Supabase, etc.)
   videos?: string[];     // URLs des vidéos (optionnel)
   status: 'pending' | 'approved' | 'rejected';
-  createdBy: string;     // UID ou ID de l'utilisateur ayant créé le lieu
+  createdBy: string;     // UID de l'utilisateur
   createdAt: Date | any; // compatibilité Timestamp Firestore
   updatedAt?: Date | any;
-  validatedBy?: string;  // UID ou ID de l'admin qui a validé
-  validatedAt?: Date | any;
 }

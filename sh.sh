@@ -11,587 +11,220 @@ backup() {
   fi
 }
 
-echo "📦 Backup des fichiers importants..."
-backup "src/app/core/models/place.model.ts"
-backup "src/app/core/services/places.service.ts"
-backup "src/app/features/admin/pages/add-place/add-place.component.ts"
-backup "src/app/features/admin/pages/admin-list/admin-list.component.ts"
-backup "src/app/features/admin/pages/admin-list/admin-list.component.html"
+echo "📦 Backup des fichiers header..."
+backup "src/app/core/components/header/header.component.ts"
+backup "src/app/core/components/header/header.component.html"
 
 ############################################
-# 1) Modèle Place : statut + vidéos optionnelles
+# 1) header.component.ts : expose user$ + menu mobile
 ############################################
-cat > src/app/core/models/place.model.ts <<'EOF'
-export interface Place {
-  id?: string;
-  name: string;
-  description: string;
-  latitude: number;
-  longitude: number;
-  categories: string[];
-  images: string[];      // URLs des images (Supabase, etc.)
-  videos?: string[];     // URLs des vidéos (optionnel)
-  status: 'pending' | 'approved' | 'rejected';
-  createdBy: string;     // UID de l'utilisateur
-  createdAt: Date | any; // compatibilité Timestamp Firestore
-  updatedAt?: Date | any;
-}
-EOF
-
-############################################
-# 2) Service PlacesService : moderation
-############################################
-cat > src/app/core/services/places.service.ts <<'EOF'
-import { Injectable, inject } from '@angular/core';
-import {
-  Firestore,
-  collection,
-  collectionData,
-  doc,
-  docData,
-  addDoc,
-  query,
-  where,
-  updateDoc,
-  deleteDoc
-} from '@angular/fire/firestore';
-import { Observable } from 'rxjs';
-import { Place } from '../models/place.model';
-
-@Injectable({
-  providedIn: 'root'
-})
-export class PlacesService {
-  private firestore: Firestore = inject(Firestore);
-
-  constructor() {}
-
-  // 🔵 Lieux publiés (status = 'approved')
-  getApprovedPlaces(): Observable<Place[]> {
-    const placesRef = collection(this.firestore, 'places');
-    const q = query(placesRef, where('status', '==', 'approved'));
-    return collectionData(q, { idField: 'id' }) as Observable<Place[]>;
-  }
-
-  // 📍 Un lieu par son ID
-  getPlaceById(id: string): Observable<Place | undefined> {
-    const placeDocRef = doc(this.firestore, `places/${id}`);
-    return docData(placeDocRef, { idField: 'id' }) as Observable<Place>;
-  }
-
-  // ➕ Ajouter un lieu
-  addPlace(place: Place): Promise<any> {
-    const placesRef = collection(this.firestore, 'places');
-    return addDoc(placesRef, place);
-  }
-
-  // ✏️ Mise à jour générique
-  updatePlace(id: string, data: Partial<Place>): Promise<void> {
-    const placeDocRef = doc(this.firestore, `places/${id}`);
-    return updateDoc(placeDocRef, data as any);
-  }
-
-  // 🟥 Supprimer un lieu
-  deletePlace(id: string): Promise<void> {
-    const placeDocRef = doc(this.firestore, `places/${id}`);
-    return deleteDoc(placeDocRef);
-  }
-
-  // 🕒 Lieux en attente de validation
-  getPendingPlaces(): Observable<Place[]> {
-    const placesRef = collection(this.firestore, 'places');
-    const q = query(placesRef, where('status', '==', 'pending'));
-    return collectionData(q, { idField: 'id' }) as Observable<Place[]>;
-  }
-
-  // ✅ Valider / approuver un lieu
-  approvePlace(id: string): Promise<void> {
-    return this.updatePlace(id, {
-      status: 'approved',
-      updatedAt: new Date()
-    });
-  }
-
-  // ❌ Rejeter un lieu
-  rejectPlace(id: string): Promise<void> {
-    return this.updatePlace(id, {
-      status: 'rejected',
-      updatedAt: new Date()
-    });
-  }
-}
-EOF
-
-############################################
-# 3) AddPlaceComponent : status selon rôle
-############################################
-cat > src/app/features/admin/pages/add-place/add-place.component.ts <<'EOF'
-import { Component, OnInit } from '@angular/core';
+cat > src/app/core/components/header/header.component.ts <<'EOF'
+import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule, NgForm } from '@angular/forms';
-import { LeafletModule } from '@bluehalo/ngx-leaflet';
-import * as L from 'leaflet';
-import { Router } from '@angular/router';
-import { PlacesService } from '../../../../core/services/places.service';
-import { SupabaseImageService } from '../../../../core/services/supabase-image.service';
-import { AuthService } from '../../../../core/services/auth.service';
-import { Place } from '../../../../core/models/place.model';
-import { firstValueFrom } from 'rxjs';
-
-@Component({
-  selector: 'app-add-place',
-  standalone: true,
-  imports: [CommonModule, FormsModule, LeafletModule],
-  templateUrl: './add-place.component.html',
-  styleUrls: ['./add-place.component.css']
-})
-export class AddPlaceComponent implements OnInit {
-  // Modèle de base du formulaire
-  model: Partial<Place> = {
-    name: '',
-    description: '',
-    latitude: 34.71,
-    longitude: 11.15,
-    categories: [],
-    images: [],
-    videos: [],
-    status: 'pending'
-  };
-
-  categoriesList: string[] = [
-    'Restaurant',
-    'Fruits de mer',
-    'Café',
-    'Fast-food',
-    'Pizzeria',
-    'Boulangerie',
-    'Glacier',
-    'Bar',
-    'Hôtel',
-    'Maison d’hôtes',
-    'Camping',
-    'Plage',
-    'Parc',
-    'Jardin',
-    'Randonnée',
-    'Musée',
-    'Monument',
-    'Site historique',
-    'Site archéologique',
-    'Centre commercial',
-    'Marché',
-    'Souk',
-    'Commerce',
-    'Spa',
-    'Bien-être',
-    'Activités nautiques',
-    'Pêche',
-    'Famille',
-    'Romantique',
-    'Vue panoramique'
-  ];
-
-  isSubmitting = false;
-  uploadingImages = false;
-  uploadingVideos = false;
-  errorMessage = '';
-  successMessage = '';
-
-  mapOptions: L.MapOptions = {
-    layers: [
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 18
-      })
-    ],
-    zoom: 10,
-    center: L.latLng(34.71, 11.15)
-  };
-
-  marker: L.Marker | null = null;
-
-  constructor(
-    private placesService: PlacesService,
-    private imageService: SupabaseImageService,
-    private auth: AuthService,
-    private router: Router
-  ) {
-    const iconRetinaUrl =
-      'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png';
-    const iconUrl =
-      'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png';
-    const shadowUrl =
-      'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png';
-
-    (L.Marker.prototype as any).options.icon = L.icon({
-      iconRetinaUrl,
-      iconUrl,
-      shadowUrl,
-      iconSize: [25, 41],
-      iconAnchor: [12, 41],
-      popupAnchor: [1, -34],
-      tooltipAnchor: [16, -28],
-      shadowSize: [41, 41]
-    });
-  }
-
-  ngOnInit(): void {
-    this.updateMarker(this.model.latitude!, this.model.longitude!);
-  }
-
-  onMapReady(map: L.Map) {
-    map.on('click', (e: L.LeafletMouseEvent) => {
-      this.model.latitude = e.latlng.lat;
-      this.model.longitude = e.latlng.lng;
-      this.updateMarker(e.latlng.lat, e.latlng.lng);
-    });
-  }
-
-  updateMarker(lat: number, lng: number) {
-    if (this.marker) {
-      this.marker.setLatLng([lat, lng]);
-    } else {
-      this.marker = L.marker([lat, lng]);
-    }
-  }
-
-  get mapLayers(): L.Layer[] {
-    return this.marker ? [this.marker] : [];
-  }
-
-  // Catégories (checkbox)
-  toggleCategory(cat: string, event: Event) {
-    const input = event.target as HTMLInputElement;
-    const checked = input.checked;
-
-    if (!this.model.categories) {
-      this.model.categories = [];
-    }
-
-    if (checked) {
-      if (!this.model.categories.includes(cat)) {
-        this.model.categories.push(cat);
-      }
-    } else {
-      this.model.categories = this.model.categories.filter(c => c !== cat);
-    }
-  }
-
-  // Upload d'IMAGES
-  async onImagesSelected(event: Event) {
-    const input = event.target as HTMLInputElement;
-    if (!input.files || input.files.length === 0) return;
-
-    const files = Array.from(input.files);
-    this.uploadingImages = true;
-    this.errorMessage = '';
-
-    try {
-      if (!this.model.images) this.model.images = [];
-
-      for (const file of files) {
-        const safeName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
-        const fileName = `${Date.now()}_${safeName}`;
-        const path = `images/${fileName}`;
-        const url = await this.imageService.uploadImage(file, path);
-        if (url) this.model.images.push(url);
-      }
-
-      input.value = '';
-    } catch (err: any) {
-      console.error('Upload images failed', err);
-      this.errorMessage =
-        "Erreur lors de l'upload des images : " +
-        (err?.message || 'Vérifiez votre configuration Supabase');
-    } finally {
-      this.uploadingImages = false;
-    }
-  }
-
-  // Upload de VIDEOS
-  async onVideosSelected(event: Event) {
-    const input = event.target as HTMLInputElement;
-    if (!input.files || input.files.length === 0) return;
-
-    const files = Array.from(input.files);
-    this.uploadingVideos = true;
-    this.errorMessage = '';
-
-    try {
-      if (!this.model.videos) this.model.videos = [];
-
-      for (const file of files) {
-        const safeName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
-        const fileName = `${Date.now()}_${safeName}`;
-        const path = `videos/${fileName}`;
-        const url = await this.imageService.uploadImage(file, path);
-        if (url) this.model.videos.push(url);
-      }
-
-      input.value = '';
-    } catch (err: any) {
-      console.error('Upload videos failed', err);
-      this.errorMessage =
-        "Erreur lors de l'upload des vidéos : " +
-        (err?.message || 'Vérifiez votre configuration Supabase');
-    } finally {
-      this.uploadingVideos = false;
-    }
-  }
-
-  removeImage(url: string) {
-    if (!this.model.images) return;
-    this.model.images = this.model.images.filter(i => i !== url);
-  }
-
-  removeVideo(url: string) {
-    if (!this.model.videos) return;
-    this.model.videos = this.model.videos.filter(v => v !== url);
-  }
-
-  // Soumission du formulaire
-  async onSubmit(form: NgForm) {
-    if (form.invalid || this.isSubmitting) return;
-
-    this.isSubmitting = true;
-    this.errorMessage = '';
-    this.successMessage = '';
-
-    try {
-      const user = await firstValueFrom(this.auth.user$);
-      if (!user) {
-        this.errorMessage = 'Vous devez être connecté.';
-        this.isSubmitting = false;
-        return;
-      }
-
-      const roles = (user as any).roles || [];
-      const isAdmin =
-        Array.isArray(roles) && roles.includes('admin');
-
-      // ✅ Si admin -> approved, sinon -> pending
-      const status: 'pending' | 'approved' | 'rejected' =
-        isAdmin ? 'approved' : 'pending';
-
-      const placeData: Place = {
-        name: this.model.name!.trim(),
-        description: this.model.description!.trim(),
-        latitude: this.model.latitude!,
-        longitude: this.model.longitude!,
-        categories: this.model.categories || [],
-        images: this.model.images || [],
-        videos: this.model.videos || [],
-        status,
-        createdBy: (user as any).uid || (user as any).id || 'unknown',
-        createdAt: new Date()
-      };
-
-      await this.placesService.addPlace(placeData);
-
-      this.successMessage = isAdmin
-        ? 'Lieu ajouté et publié avec succès !'
-        : 'Lieu ajouté ! En attente de validation par un administrateur.';
-
-      form.resetForm({
-        latitude: 34.71,
-        longitude: 11.15,
-        categories: [],
-        images: [],
-        videos: []
-      });
-      this.model = {
-        latitude: 34.71,
-        longitude: 11.15,
-        categories: [],
-        images: [],
-        videos: [],
-        status: 'pending'
-      };
-      this.updateMarker(34.71, 11.15);
-
-      setTimeout(() => this.router.navigate(['/']), 1500);
-    } catch (err) {
-      console.error(err);
-      this.errorMessage = "Erreur lors de l'enregistrement.";
-    } finally {
-      this.isSubmitting = false;
-    }
-  }
-}
-EOF
-
-############################################
-# 4) AdminListComponent TS : modération des lieux en attente
-############################################
-cat > src/app/features/admin/pages/admin-list/admin-list.component.ts <<'EOF'
-import { Component, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
-import { PlacesService } from '../../../../core/services/places.service';
-import { Place } from '../../../../core/models/place.model';
+import { RouterModule, Router } from '@angular/router';
 import { Observable } from 'rxjs';
 
+import { AuthService } from '../../services/auth.service';
+import { User } from '../../models/user.model';
+
 @Component({
-  selector: 'app-admin-list',
+  selector: 'app-header',
   standalone: true,
   imports: [CommonModule, RouterModule],
-  templateUrl: './admin-list.component.html',
-  styles: [`
-    .card { @apply bg-white rounded-lg shadow p-6 mb-4; }
-    .btn { @apply px-3 py-2 rounded text-sm font-semibold transition; }
-    .btn-approve { @apply bg-green-600 text-white hover:bg-green-700; }
-    .btn-reject { @apply bg-red-600 text-white hover:bg-red-700; }
-    .badge { @apply inline-block text-xs px-2 py-1 rounded-full; }
-  `]
+  templateUrl: './header.component.html',
+  styleUrls: ['./header.component.css']
 })
-export class AdminListComponent {
-  private placesService = inject(PlacesService);
+export class HeaderComponent {
+  user$: Observable<User | null | undefined>;
+  isMobileMenuOpen = false;
 
-  pendingPlaces$: Observable<Place[]> =
-    this.placesService.getPendingPlaces();
-
-  isProcessingId: string | null = null;
-  message = '';
-
-  async approve(place: Place) {
-    if (!place.id) return;
-    this.isProcessingId = place.id;
-    this.message = '';
-
-    try {
-      await this.placesService.approvePlace(place.id);
-      this.message = `✅ Lieu "${place.name}" approuvé.`;
-    } catch (err) {
-      console.error(err);
-      this.message = `❌ Erreur lors de la validation de "${place.name}".`;
-    } finally {
-      this.isProcessingId = null;
-    }
+  constructor(private auth: AuthService, private router: Router) {
+    this.user$ = this.auth.user$;
   }
 
-  async reject(place: Place) {
-    if (!place.id) return;
-    const confirmReject = window.confirm(
-      `Êtes-vous sûr de vouloir rejeter le lieu "${place.name}" ?`
-    );
-    if (!confirmReject) return;
+  toggleMobileMenu() {
+    this.isMobileMenuOpen = !this.isMobileMenuOpen;
+  }
 
-    this.isProcessingId = place.id;
-    this.message = '';
-
-    try {
-      await this.placesService.rejectPlace(place.id);
-      this.message = `✅ Lieu "${place.name}" rejeté.`;
-    } catch (err) {
-      console.error(err);
-      this.message = `❌ Erreur lors du rejet de "${place.name}".`;
-    } finally {
-      this.isProcessingId = null;
-    }
+  async logout() {
+    await this.auth.signOut();
+    this.router.navigate(['/login']);
+    this.isMobileMenuOpen = false;
   }
 }
 EOF
 
 ############################################
-# 5) AdminListComponent HTML : liste de modération
+# 2) header.component.html : bouton Admin seulement pour les admins
 ############################################
-cat > src/app/features/admin/pages/admin-list/admin-list.component.html <<'EOF'
-<div class="container mx-auto p-6">
-  <h1 class="text-3xl font-bold text-blue-900 mb-6">
-    Administration – Modération des lieux
-  </h1>
+cat > src/app/core/components/header/header.component.html <<'EOF'
+<header class="bg-blue-900 text-white shadow-md sticky top-0 z-50">
+  <div class="container mx-auto px-4 py-3">
+    <div class="flex justify-between items-center">
+      
+      <!-- Logo -->
+      <a
+        routerLink="/"
+        class="flex items-center gap-2 text-xl font-bold tracking-wider hover:text-blue-200 transition"
+      >
+        <span class="text-2xl">🏝️</span>
+        <span class="hidden sm:inline">Kerkennah Map</span>
+      </a>
 
-  <div
-    *ngIf="message"
-    class="mb-4 p-3 rounded border text-sm"
-    [ngClass]="{
-      'bg-green-50 text-green-700 border-green-200': message.startsWith('✅'),
-      'bg-red-50 text-red-700 border-red-200': message.startsWith('❌')
-    }"
-  >
-    {{ message }}
-  </div>
+      <!-- Navigation Desktop -->
+      <nav class="hidden md:flex items-center space-x-6">
+        <a
+          routerLink="/"
+          routerLinkActive="text-yellow-400"
+          class="hover:text-blue-200 font-medium transition"
+        >
+          Carte
+        </a>
 
-  <ng-container *ngIf="pendingPlaces$ | async as pending; else loading">
-    <div *ngIf="pending.length === 0" class="text-gray-500 italic">
-      Aucun lieu en attente de validation pour le moment.
-    </div>
-
-    <div *ngFor="let place of pending" class="card">
-      <div class="flex flex-col md:flex-row md:items-start gap-4">
-        <div class="flex-1">
-          <div class="flex items-center gap-2 mb-1">
-            <h2 class="text-lg font-semibold text-gray-900">
-              {{ place.name }}
-            </h2>
-            <span class="badge bg-yellow-100 text-yellow-800 border border-yellow-200">
-              En attente
-            </span>
-          </div>
-
-          <p class="text-sm text-gray-600 mb-2">
-            {{ place.description || 'Aucune description.' }}
-          </p>
-
-          <div class="flex flex-wrap gap-2 mb-2">
-            <span
-              *ngFor="let cat of place.categories"
-              class="badge bg-blue-50 text-blue-700 border border-blue-100"
-            >
-              {{ cat }}
-            </span>
-          </div>
-
-          <p class="text-xs text-gray-500">
-            <span class="font-semibold">Position :</span>
-            {{ place.latitude | number : '1.4-4' }},
-            {{ place.longitude | number : '1.4-4' }}
-          </p>
-
-          <p class="text-xs text-gray-400 mt-1">
-            Proposé par :
-            <span class="font-mono">
-              {{ place.createdBy || 'inconnu' }}
-            </span>
-          </p>
-        </div>
-
-        <div class="flex flex-col items-stretch gap-2 md:w-48">
+        <!-- Liens visibles seulement quand connecté -->
+        <ng-container *ngIf="user$ | async as user">
           <a
-            [routerLink]="['/place', place.id]"
-            class="btn bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 text-center"
+            routerLink="/add-place"
+            routerLinkActive="text-yellow-400"
+            class="hover:text-blue-200 transition"
           >
-            👁 Voir la fiche
+            Ajouter un lieu
           </a>
 
-          <button
-            type="button"
-            (click)="approve(place)"
-            [disabled]="isProcessingId === place.id"
-            class="btn btn-approve disabled:opacity-50 disabled:cursor-not-allowed"
+          <!-- 🔐 Bouton Admin visible uniquement si l'utilisateur est admin -->
+          <a
+            *ngIf="user.roles?.includes('admin')"
+            routerLink="/admin"
+            routerLinkActive="text-yellow-400"
+            class="hover:text-blue-200 transition"
           >
-            ✅ Valider
-          </button>
+            Admin
+          </a>
+        </ng-container>
+      </nav>
 
+      <!-- Zone Utilisateur Desktop -->
+      <div class="hidden md:flex items-center gap-4">
+        <ng-container *ngIf="user$ | async as user; else loginBtn">
+          <div class="text-right">
+            <p class="text-xs text-blue-300">Connecté en tant que</p>
+            <p class="text-sm font-semibold">{{ user.email }}</p>
+          </div>
           <button
-            type="button"
-            (click)="reject(place)"
-            [disabled]="isProcessingId === place.id"
-            class="btn btn-reject disabled:opacity-50 disabled:cursor-not-allowed"
+            (click)="logout()"
+            class="bg-red-500/80 hover:bg-red-500 text-white text-sm px-3 py-2 rounded-full font-semibold shadow-sm transition"
           >
-            ❌ Rejeter
+            Déconnexion
           </button>
-        </div>
+        </ng-container>
+
+        <ng-template #loginBtn>
+          <a
+            routerLink="/login"
+            class="bg-yellow-400 text-blue-900 px-4 py-2 rounded-full font-semibold shadow-sm hover:bg-yellow-300 transition text-sm"
+          >
+            Connexion
+          </a>
+        </ng-template>
       </div>
-    </div>
-  </ng-container>
 
-  <ng-template #loading>
-    <div class="text-gray-500 italic">Chargement des lieux en attente...</div>
-  </ng-template>
-</div>
+      <!-- Bouton Menu Mobile -->
+      <button
+        class="md:hidden flex items-center justify-center w-10 h-10 rounded-full bg-blue-800 hover:bg-blue-700 transition"
+        (click)="toggleMobileMenu()"
+        type="button"
+        aria-label="Menu"
+      >
+        <svg
+          *ngIf="!isMobileMenuOpen"
+          xmlns="http://www.w3.org/2000/svg"
+          class="h-6 w-6"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+        <svg
+          *ngIf="isMobileMenuOpen"
+          xmlns="http://www.w3.org/2000/svg"
+          class="h-6 w-6"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+
+    <!-- Menu Mobile -->
+    <div
+      class="md:hidden mt-3 rounded-lg bg-blue-800/80 backdrop-blur border border-blue-700"
+      *ngIf="isMobileMenuOpen"
+    >
+      <ng-container *ngIf="user$ | async as user; else mobileLogin">
+        <nav class="flex flex-col gap-2 px-4 py-3">
+          <a
+            routerLink="/"
+            (click)="isMobileMenuOpen=false"
+            routerLinkActive="text-yellow-400"
+            class="py-1 border-b border-blue-700/60 hover:text-yellow-300 transition"
+          >
+            Carte
+          </a>
+
+          <a
+            routerLink="/add-place"
+            (click)="isMobileMenuOpen=false"
+            routerLinkActive="text-yellow-400"
+            class="py-1 border-b border-blue-700/60 hover:text-yellow-300 transition"
+          >
+            Ajouter un lieu
+          </a>
+
+          <!-- 🔐 Bouton Admin sur mobile seulement si admin -->
+          <a
+            *ngIf="user.roles?.includes('admin')"
+            routerLink="/admin"
+            (click)="isMobileMenuOpen=false"
+            routerLinkActive="text-yellow-400"
+            class="py-1 border-b border-blue-700/60 hover:text-yellow-300 transition"
+          >
+            Admin
+          </a>
+
+          <div class="pt-2">
+            <p class="text-xs text-blue-300 mb-1">Connecté en tant que</p>
+            <p class="text-sm text-white mb-3 font-medium">
+              {{ user.email }}
+            </p>
+            <button
+              (click)="logout()"
+              class="w-full text-center py-2 rounded-full bg-red-500/80 hover:bg-red-500 transition font-bold text-sm"
+            >
+              Déconnexion
+            </button>
+          </div>
+        </nav>
+      </ng-container>
+
+      <ng-template #mobileLogin>
+        <div class="px-4 py-3">
+          <a
+            routerLink="/login"
+            (click)="isMobileMenuOpen=false"
+            class="block w-full bg-yellow-400 text-blue-900 py-2 rounded-full font-bold text-center shadow-sm hover:bg-yellow-300 transition text-sm"
+          >
+            Connexion
+          </a>
+        </div>
+      </ng-template>
+    </div>
+  </div>
+</header>
 EOF
 
-echo "✅ Patch moderation appliqué :"
-echo "  - Utilisateur normal : lieux en 'pending', non visibles sur la carte"
-echo "  - Admin : lieux en 'approved' directement, visibles sur la carte"
-echo "  - /admin/places : liste des lieux en attente avec actions de validation/rejet"
+echo "✅ Patch appliqué : le bouton 'Admin' n'apparaît que si user.roles contient 'admin' (desktop + mobile)."

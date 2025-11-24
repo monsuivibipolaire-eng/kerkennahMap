@@ -85,6 +85,29 @@
           <p class="text-gray-700 leading-relaxed">
             {{ place.description || 'Aucune description pour l’instant.' }}
           </p>
+
+          <!-- 🧾 Infos auteur / validation -->
+          <div class="mt-4 pt-3 border-t border-gray-100 text-xs text-gray-600 space-y-1">
+            <div>
+              <span class="font-semibold">Ajouté par :</span>
+              <span class="font-mono">
+                {{ place.createdBy || 'inconnu' }}
+              </span>
+            </div>
+
+            <div *ngIf="place.validatedBy; else enAttente">
+              <span class="font-semibold">Validé par :</span>
+              <span class="font-mono">
+                {{ place.validatedBy }}
+              </span>
+            </div>
+            <ng-template #enAttente>
+              <div>
+                <span class="font-semibold">Validé par :</span>
+                <span class="italic text-gray-500">En attente de validation</span>
+              </div>
+            </ng-template>
+          </div>
         </div>
 
         <!-- Galerie photos -->
@@ -160,183 +183,3 @@
     <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
   </div>
 </ng-template>
-
-<!-- MODAL EDIT PLACE (ADMIN) -->
-<div *ngIf="showEditModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-  <div class="bg-white w-full max-w-xl mx-4 rounded-2xl shadow-xl flex flex-col max-h-[90vh]">
-    <div class="px-6 py-4 border-b flex items-center justify-between">
-      <h2 class="text-lg font-semibold text-gray-900">Modifier cette place</h2>
-      <button
-        type="button"
-        (click)="closeEditModal()"
-        class="text-gray-400 hover:text-gray-600"
-      >
-        ✕
-      </button>
-    </div>
-
-    <form class="px-6 py-4 space-y-4 overflow-y-auto" *ngIf="editingPlace as form">
-      <!-- Nom -->
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Nom</label>
-        <input
-          [(ngModel)]="form.name"
-          name="name"
-          type="text"
-          class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
-
-      <!-- Description -->
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
-        <textarea
-          [(ngModel)]="form.description"
-          name="description"
-          rows="3"
-          class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-        ></textarea>
-      </div>
-
-      <!-- Lat / Lng -->
-      <div class="grid grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Latitude</label>
-          <input
-            [(ngModel)]="form.latitude"
-            name="latitude"
-            type="number"
-            step="0.000001"
-            class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Longitude</label>
-          <input
-            [(ngModel)]="form.longitude"
-            name="longitude"
-            type="number"
-            step="0.000001"
-            class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-      </div>
-
-      <!-- Catégories -->
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-2">Catégories</label>
-        <div class="flex flex-wrap gap-2">
-          <label
-            *ngFor="let cat of availableCategories"
-            class="inline-flex items-center gap-2 text-xs bg-gray-100 px-3 py-1 rounded-full cursor-pointer"
-          >
-            <input
-              type="checkbox"
-              [checked]="form.categories?.includes(cat)"
-              (change)="toggleCategory(cat, $event)"
-              class="rounded border-gray-300"
-            />
-            <span>{{ cat }}</span>
-          </label>
-        </div>
-      </div>
-
-      <!-- Images existantes -->
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-2">Images existantes</label>
-        <div *ngIf="form.images && form.images.length > 0; else noImages" class="grid grid-cols-3 gap-3">
-          <div *ngFor="let img of form.images" class="relative group">
-            <img
-              [src]="img"
-              class="w-full h-24 object-cover rounded-lg border border-gray-200"
-            />
-            <button
-              type="button"
-              (click)="removeExistingImage(img)"
-              class="absolute top-1 right-1 text-[10px] px-2 py-1 rounded-full bg-black/70 text-white opacity-0 group-hover:opacity-100 transition"
-            >
-              Supprimer
-            </button>
-          </div>
-        </div>
-        <ng-template #noImages>
-          <p class="text-xs text-gray-500 italic">Aucune image pour l’instant.</p>
-        </ng-template>
-      </div>
-
-      <!-- Ajout de nouvelles images -->
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-2">Ajouter des images</label>
-        <input
-          type="file"
-          multiple
-          accept="image/*"
-          (change)="onImagesSelected($event)"
-          class="block w-full text-xs text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-yellow-50 file:text-yellow-700 hover:file:bg-yellow-100"
-        />
-        <div *ngIf="uploadingImages" class="mt-2 text-xs text-blue-600">
-          Upload des images en cours...
-        </div>
-      </div>
-
-      <!-- Vidéos existantes -->
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-2">Vidéos existantes</label>
-        <div *ngIf="form.videos && form.videos.length > 0; else noVideos" class="grid grid-cols-2 gap-3">
-          <div *ngFor="let vid of form.videos" class="relative group">
-            <video
-              [src]="vid"
-              class="w-full h-24 object-cover rounded-lg border border-gray-200 bg-black"
-              controls
-            ></video>
-            <button
-              type="button"
-              (click)="removeExistingVideo(vid)"
-              class="absolute top-1 right-1 text-[10px] px-2 py-1 rounded-full bg-black/70 text-white opacity-0 group-hover:opacity-100 transition"
-            >
-              Supprimer
-            </button>
-          </div>
-        </div>
-        <ng-template #noVideos>
-          <p class="text-xs text-gray-500 italic">Aucune vidéo pour l’instant.</p>
-        </ng-template>
-      </div>
-
-      <!-- Ajout de nouvelles vidéos -->
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-2">Ajouter des vidéos</label>
-        <input
-          type="file"
-          multiple
-          accept="video/*"
-          (change)="onVideosSelected($event)"
-          class="block w-full text-xs text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100"
-        />
-        <div *ngIf="uploadingVideos" class="mt-2 text-xs text-purple-600">
-          Upload des vidéos en cours...
-        </div>
-        <div *ngIf="uploadError" class="mt-2 text-xs text-red-600">
-          {{ uploadError }}
-        </div>
-      </div>
-
-      <div class="flex justify-end gap-3 pt-2">
-        <button
-          type="button"
-          (click)="closeEditModal()"
-          class="px-4 py-2 text-sm rounded-lg border border-gray-300 hover:bg-gray-50"
-        >
-          Annuler
-        </button>
-        <button
-          type="button"
-          (click)="savePlace()"
-          class="px-4 py-2 text-sm rounded-lg bg-yellow-400 hover:bg-yellow-500 text-gray-900 font-semibold shadow"
-        >
-          💾 Enregistrer
-        </button>
-      </div>
-    </form>
-  </div>
-</div>
