@@ -10,7 +10,6 @@ import { FormsModule } from '@angular/forms';
 import { PlacesService } from '../../../../core/services/places.service';
 import { Place } from '../../../../core/models/place.model';
 import { AuthService } from '../../../../core/services/auth.service';
-import { SupabaseImageService } from '../../../../core/services/supabase-image.service';
 
 @Component({
   selector: 'app-place-detail',
@@ -23,7 +22,6 @@ export class PlaceDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private placesService = inject(PlacesService);
   private authService = inject(AuthService);
-  private supabaseImageService = inject(SupabaseImageService);
 
   // Place affichée
   place$: Observable<Place | undefined> = of(undefined);
@@ -34,11 +32,6 @@ export class PlaceDetailComponent implements OnInit {
   // Modal édition
   showEditModal = false;
   editingPlace: Place | null = null;
-
-  // Upload états
-  uploadingImages = false;
-  uploadingVideos = false;
-  uploadError: string | null = null;
 
   // Liste de catégories disponibles
   availableCategories: string[] = [
@@ -146,16 +139,10 @@ export class PlaceDetailComponent implements OnInit {
   // -------- MODAL ÉDITION --------
 
   openEditModal(place: Place) {
-    this.uploadError = null;
-    this.uploadingImages = false;
-    this.uploadingVideos = false;
-
     // On clone la place pour ne pas modifier directement la référence du flux
     this.editingPlace = {
       ...place,
-      categories: [...(place.categories || [])],
-      images: [...(place.images || [])],
-      videos: [...(place.videos || [])]
+      categories: [...(place.categories || [])]
     };
     this.showEditModal = true;
   }
@@ -163,9 +150,6 @@ export class PlaceDetailComponent implements OnInit {
   closeEditModal() {
     this.showEditModal = false;
     this.editingPlace = null;
-    this.uploadError = null;
-    this.uploadingImages = false;
-    this.uploadingVideos = false;
   }
 
   toggleCategory(cat: string, event: Event) {
@@ -189,96 +173,6 @@ export class PlaceDetailComponent implements OnInit {
     }
   }
 
-  // -------- IMAGES --------
-
-  async onImagesSelected(event: Event) {
-    if (!this.editingPlace) return;
-    const input = event.target as HTMLInputElement;
-    if (!input.files || input.files.length === 0) return;
-
-    const files = Array.from(input.files);
-    this.uploadingImages = true;
-    this.uploadError = null;
-
-    try {
-      const newUrls: string[] = [];
-      const idPart = this.editingPlace.id || 'temp';
-
-      for (const file of files) {
-        const safeName = file.name.replace(/\s+/g, '-').toLowerCase();
-        const path = `images/${idPart}-${Date.now()}-${safeName}`;
-        const url = await this.supabaseImageService.uploadImage(file, path);
-        if (url) newUrls.push(url);
-      }
-
-      this.editingPlace = {
-        ...this.editingPlace,
-        images: [...(this.editingPlace.images || []), ...newUrls]
-      };
-
-      input.value = '';
-    } catch (err) {
-      console.error('Erreur upload images', err);
-      this.uploadError = "Erreur lors de l'upload des images.";
-    } finally {
-      this.uploadingImages = false;
-    }
-  }
-
-  removeExistingImage(url: string) {
-    if (!this.editingPlace) return;
-    this.editingPlace = {
-      ...this.editingPlace,
-      images: (this.editingPlace.images || []).filter(img => img !== url)
-    };
-  }
-
-  // -------- VIDEOS --------
-
-  async onVideosSelected(event: Event) {
-    if (!this.editingPlace) return;
-    const input = event.target as HTMLInputElement;
-    if (!input.files || input.files.length === 0) return;
-
-    const files = Array.from(input.files);
-    this.uploadingVideos = true;
-    this.uploadError = null;
-
-    try {
-      const newUrls: string[] = [];
-      const idPart = this.editingPlace.id || 'temp';
-
-      for (const file of files) {
-        const safeName = file.name.replace(/\s+/g, '-').toLowerCase();
-        const path = `videos/${idPart}-${Date.now()}-${safeName}`;
-        const url = await this.supabaseImageService.uploadImage(file, path);
-        if (url) newUrls.push(url);
-      }
-
-      this.editingPlace = {
-        ...this.editingPlace,
-        videos: [...(this.editingPlace.videos || []), ...newUrls]
-      };
-
-      input.value = '';
-    } catch (err) {
-      console.error('Erreur upload vidéos', err);
-      this.uploadError = "Erreur lors de l'upload des vidéos.";
-    } finally {
-      this.uploadingVideos = false;
-    }
-  }
-
-  removeExistingVideo(url: string) {
-    if (!this.editingPlace) return;
-    this.editingPlace = {
-      ...this.editingPlace,
-      videos: (this.editingPlace.videos || []).filter(v => v !== url)
-    };
-  }
-
-  // -------- SAUVEGARDE --------
-
   async savePlace() {
     if (!this.editingPlace || !this.editingPlace.id) return;
 
@@ -289,8 +183,6 @@ export class PlaceDetailComponent implements OnInit {
       latitude: this.editingPlace.latitude,
       longitude: this.editingPlace.longitude,
       categories: this.editingPlace.categories || [],
-      images: this.editingPlace.images || [],
-      videos: this.editingPlace.videos || [],
       updatedAt: new Date()
     };
 

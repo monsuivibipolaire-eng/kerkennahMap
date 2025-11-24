@@ -93,19 +93,6 @@
             />
           </div>
         </div>
-
-        <!-- Vidéos -->
-        <div *ngIf="place.videos && place.videos.length > 0" class="bg-white rounded-2xl shadow-sm p-6">
-          <h3 class="text-lg font-semibold text-gray-800 mb-3">Vidéos</h3>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <video
-              *ngFor="let vid of place.videos"
-              [src]="vid"
-              controls
-              class="w-full h-48 md:h-56 rounded-xl border border-gray-200 bg-black"
-            ></video>
-          </div>
-        </div>
       </div>
 
       <!-- Colonne latérale -->
@@ -232,86 +219,6 @@
             />
             <span>{{ cat }}</span>
           </label>
-        </div>
-      </div>
-
-      <!-- Images existantes -->
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-2">Images existantes</label>
-        <div *ngIf="form.images && form.images.length > 0; else noImages" class="grid grid-cols-3 gap-3">
-          <div *ngFor="let img of form.images" class="relative group">
-            <img
-              [src]="img"
-              class="w-full h-24 object-cover rounded-lg border border-gray-200"
-            />
-            <button
-              type="button"
-              (click)="removeExistingImage(img)"
-              class="absolute top-1 right-1 text-[10px] px-2 py-1 rounded-full bg-black/70 text-white opacity-0 group-hover:opacity-100 transition"
-            >
-              Supprimer
-            </button>
-          </div>
-        </div>
-        <ng-template #noImages>
-          <p class="text-xs text-gray-500 italic">Aucune image pour l’instant.</p>
-        </ng-template>
-      </div>
-
-      <!-- Ajout de nouvelles images -->
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-2">Ajouter des images</label>
-        <input
-          type="file"
-          multiple
-          accept="image/*"
-          (change)="onImagesSelected($event)"
-          class="block w-full text-xs text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-yellow-50 file:text-yellow-700 hover:file:bg-yellow-100"
-        />
-        <div *ngIf="uploadingImages" class="mt-2 text-xs text-blue-600">
-          Upload des images en cours...
-        </div>
-      </div>
-
-      <!-- Vidéos existantes -->
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-2">Vidéos existantes</label>
-        <div *ngIf="form.videos && form.videos.length > 0; else noVideos" class="grid grid-cols-2 gap-3">
-          <div *ngFor="let vid of form.videos" class="relative group">
-            <video
-              [src]="vid"
-              class="w-full h-24 object-cover rounded-lg border border-gray-200 bg-black"
-              controls
-            ></video>
-            <button
-              type="button"
-              (click)="removeExistingVideo(vid)"
-              class="absolute top-1 right-1 text-[10px] px-2 py-1 rounded-full bg-black/70 text-white opacity-0 group-hover:opacity-100 transition"
-            >
-              Supprimer
-            </button>
-          </div>
-        </div>
-        <ng-template #noVideos>
-          <p class="text-xs text-gray-500 italic">Aucune vidéo pour l’instant.</p>
-        </ng-template>
-      </div>
-
-      <!-- Ajout de nouvelles vidéos -->
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-2">Ajouter des vidéos</label>
-        <input
-          type="file"
-          multiple
-          accept="video/*"
-          (change)="onVideosSelected($event)"
-          class="block w-full text-xs text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100"
-        />
-        <div *ngIf="uploadingVideos" class="mt-2 text-xs text-purple-600">
-          Upload des vidéos en cours...
-        </div>
-        <div *ngIf="uploadError" class="mt-2 text-xs text-red-600">
-          {{ uploadError }}
         </div>
       </div>
 
