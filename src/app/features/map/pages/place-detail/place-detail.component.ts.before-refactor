@@ -1,12 +1,5 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { PlaceHeaderComponent } from '../../components/place-header.component';
-import { PlaceInfoComponent } from '../../components/place-info.component';
-import { PlaceAdminActionsComponent } from '../../components/place-admin-actions.component';
-import { PlaceCommentsComponent } from '../../components/place-comments.component';
-import { PlaceMediaGalleryComponent } from '../../components/place-media-gallery.component';
-import { PlaceMapCardComponent } from '../../components/place-map-card.component';
-import { PlaceEditModalComponent } from '../../components/place-edit-modal.component';
 import { ActivatedRoute, RouterModule, Router } from '@angular/router';
 import { LeafletModule } from '@bluehalo/ngx-leaflet';
 import * as L from 'leaflet';
@@ -14,6 +7,13 @@ import { Observable, of } from 'rxjs';
 import { switchMap, tap, map } from 'rxjs/operators';
 import { FormsModule } from '@angular/forms';
 
+import { PlaceHeaderComponent } from '../../components/place-header.component';
+import { PlaceInfoComponent } from '../../components/place-info.component';
+import { PlaceAdminActionsComponent } from '../../components/place-admin-actions.component';
+import { PlaceCommentsComponent } from '../../components/place-comments.component';
+import { PlaceMediaGalleryComponent } from '../../components/place-media-gallery.component';
+import { PlaceMapCardComponent } from '../../components/place-map-card.component';
+import { PlaceEditModalComponent } from '../../components/place-edit-modal.component';
 import { PlacesService } from '../../../../core/services/places.service';
 import { Place } from '../../../../core/models/place.model';
 import { AuthService } from '../../../../core/services/auth.service';
@@ -29,7 +29,7 @@ interface PlaceComment {
 @Component({
   selector: 'app-place-detail',
   standalone: true,
-  imports: [CommonModule, PlaceHeaderComponent, PlaceInfoComponent, PlaceAdminActionsComponent, PlaceCommentsComponent, PlaceMediaGalleryComponent, PlaceMapCardComponent, PlaceEditModalComponent],
+  imports: [CommonModule, RouterModule, LeafletModule, FormsModule],
   templateUrl: './place-detail.component.html',
   styleUrls: ['./place-detail.component.css']
 })
@@ -494,36 +494,4 @@ export class PlaceDetailComponent implements OnInit {
     if (!this.mediaViewerItems.length) return null;
     return this.mediaViewerItems[this.mediaViewerIndex];
   }
-
-  // ===== Auto-added stubs for place-detail refactor =====
-  // TODO: remplace ces stubs par ta vraie logique (upload, commentaires, édition, etc.)
-
-  // Indique si un enregistrement de lieu est en cours (utilisé par app-place-edit-modal)
-  isSavingPlace = false;
-
-  // Handler appelé par app-place-media-gallery lorsqu'on ajoute des images
-  onUploadImages(files: FileList) {
-    // TODO: implémenter la logique d'upload d'images
-    console.warn('[PlaceDetailComponent] onUploadImages stub - implement me', files);
-  }
-
-  // Handler appelé par app-place-media-gallery lorsqu'on ajoute des vidéos
-  onUploadVideos(files: FileList) {
-    // TODO: implémenter la logique d'upload de vidéos
-    console.warn('[PlaceDetailComponent] onUploadVideos stub - implement me', files);
-  }
-
-  // Handler appelé par app-place-comments lorsqu'on soumet un commentaire
-  onSubmitComment(event: { rating: number; text: string }) {
-    // TODO: implémenter la logique d’envoi de commentaire
-    console.warn('[PlaceDetailComponent] onSubmitComment stub - implement me', event);
-  }
-
-  // Handler appelé par app-place-edit-modal lorsqu'on sauvegarde le lieu édité
-  onSaveEditedPlace(updatedPlace: any) {
-    // TODO: implémenter la logique de sauvegarde du lieu (appel API, etc.)
-    console.warn('[PlaceDetailComponent] onSaveEditedPlace stub - implement me', updatedPlace);
-  }
-  // ===== End auto-added stubs for place-detail refactor =====
-
 }

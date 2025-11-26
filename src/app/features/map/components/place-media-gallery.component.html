@@ -1,0 +1,54 @@
+<div *ngIf="place as p" class="bg-white rounded-xl shadow-sm p-4 md:p-6 space-y-4">
+  <h2 class="text-lg font-semibold text-gray-900">Médias</h2>
+
+  <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+    <ng-container *ngFor="let img of p.images">
+      <img
+        [src]="img"
+        class="w-full h-32 object-cover rounded-md border border-gray-100"
+        alt="Image du lieu"
+      />
+    </ng-container>
+  </div>
+
+  <div *ngIf="p.videos?.length" class="space-y-2">
+    <div class="text-sm font-medium text-gray-900">Vidéos</div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+      <video
+        *ngFor="let vid of p.videos"
+        class="w-full h-40 rounded-md border border-gray-100"
+        controls
+      >
+        <source [src]="vid" type="video/mp4" />
+      </video>
+    </div>
+  </div>
+
+  <div class="border-t border-gray-100 pt-4 space-y-2 text-sm">
+    <div class="flex flex-col md:flex-row gap-2 md:items-center">
+      <label class="text-sm font-medium text-gray-700">Ajouter des images :</label>
+      <input
+        type="file"
+        accept="image/*"
+        multiple
+        (change)="onImagesSelected($event)"
+      />
+      <span *ngIf="uploadingImages" class="text-xs text-gray-500">Upload images...</span>
+    </div>
+
+    <div class="flex flex-col md:flex-row gap-2 md:items-center">
+      <label class="text-sm font-medium text-gray-700">Ajouter des vidéos :</label>
+      <input
+        type="file"
+        accept="video/*"
+        multiple
+        (change)="onVideosSelected($event)"
+      />
+      <span *ngIf="uploadingVideos" class="text-xs text-gray-500">Upload vidéos...</span>
+    </div>
+
+    <div *ngIf="uploadError" class="text-xs text-red-600">
+      {{ uploadError }}
+    </div>
+  </div>
+</div>

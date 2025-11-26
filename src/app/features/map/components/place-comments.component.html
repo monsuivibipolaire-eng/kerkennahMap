@@ -1,0 +1,70 @@
+<div class="bg-white rounded-xl shadow-sm p-4 md:p-6 space-y-4">
+  <h2 class="text-lg font-semibold text-gray-900">Avis et commentaires</h2>
+
+  <div *ngIf="isLoggedIn; else mustLogin" class="space-y-3">
+    <div class="flex items-center gap-2 text-sm">
+      <span class="font-medium">Votre note :</span>
+      <select
+        class="border border-gray-300 rounded-md px-2 py-1 text-sm"
+        [(ngModel)]="newRating"
+      >
+        <option *ngFor="let r of [1,2,3,4,5]" [ngValue]="r">{{ r }}</option>
+      </select>
+      <span class="text-yellow-400">★</span>
+    </div>
+
+    <textarea
+      class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+      rows="3"
+      [(ngModel)]="newText"
+      placeholder="Partage ton expérience..."
+    ></textarea>
+
+    <button
+      type="button"
+      class="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60"
+      [disabled]="isSubmitting || !newText.trim()"
+      (click)="onSubmit()"
+    >
+      <ng-container *ngIf="!isSubmitting; else submitting">
+        Publier mon avis
+      </ng-container>
+      <ng-template #submitting>Envoi...</ng-template>
+    </button>
+  </div>
+
+  <ng-template #mustLogin>
+    <p class="text-sm text-gray-600">
+      Connecte-toi pour laisser un commentaire.
+    </p>
+  </ng-template>
+
+  <div class="border-t border-gray-100 pt-4 space-y-3" *ngIf="comments.length > 0; else noComments">
+    <div
+      *ngFor="let c of comments"
+      class="pb-3 border-b border-gray-100 last:border-none last:pb-0"
+    >
+      <div class="flex items-center justify-between mb-1">
+        <div class="font-semibold text-sm text-gray-900">
+          {{ c.userName || 'Utilisateur' }}
+        </div>
+        <div class="flex items-center gap-1 text-xs text-gray-600">
+          <span class="text-yellow-400">★</span>
+          <span class="font-semibold">{{ c.rating }}</span>
+        </div>
+      </div>
+      <p class="text-sm text-gray-700 whitespace-pre-line">
+        {{ c.comment }}
+      </p>
+      <div class="mt-1 text-xs text-gray-400">
+        {{ c.createdAt | date: 'short' }}
+      </div>
+    </div>
+  </div>
+
+  <ng-template #noComments>
+    <p class="text-sm text-gray-500">
+      Aucun avis pour le moment. Sois le premier à partager ton expérience !
+    </p>
+  </ng-template>
+</div>

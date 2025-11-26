@@ -1,0 +1,34 @@
+<div *ngIf="place as p" class="bg-white rounded-xl shadow-sm p-4 md:p-6 space-y-4">
+  <h2 class="text-lg font-semibold text-gray-900">À propos de ce lieu</h2>
+  <p class="text-sm text-gray-700 whitespace-pre-line">
+    {{ p.description }}
+  </p>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-700">
+    <div>
+      <div class="font-semibold text-gray-900 mb-1">Localisation</div>
+      <div>Latitude : {{ p.latitude }}</div>
+      <div>Longitude : {{ p.longitude }}</div>
+    </div>
+    <div>
+      <div class="font-semibold text-gray-900 mb-1">Catégories</div>
+      <div class="flex flex-wrap gap-1">
+        <span
+          *ngFor="let cat of p.categories"
+          class="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-50 text-xs text-blue-700 border border-blue-100"
+        >
+          {{ cat }}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div class="border-t border-gray-100 pt-3 text-xs text-gray-500 space-y-1">
+    <div>Créé le : {{ p.createdAt | date: 'short' }}</div>
+    <div *ngIf="p.updatedAt">Mis à jour le : {{ p.updatedAt | date: 'short' }}</div>
+    <div *ngIf="p.validatedBy">
+      Validé par : {{ p.validatedBy }}
+      <span *ngIf="p.validatedAt">• le {{ p.validatedAt | date: 'short' }}</span>
+    </div>
+  </div>
+</div>

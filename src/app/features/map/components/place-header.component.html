@@ -1,0 +1,62 @@
+<div class="relative h-64 md:h-96 w-full bg-gray-800 overflow-hidden" *ngIf="place as p">
+  <img
+    *ngIf="p.images && p.images.length > 0"
+    [src]="p.images[0]"
+    class="w-full h-full object-cover opacity-70"
+    [alt]="p.name"
+  />
+
+  <div
+    *ngIf="!p.images || p.images.length === 0"
+    class="absolute inset-0 bg-gradient-to-r from-blue-900 to-blue-700 opacity-80"
+  ></div>
+
+  <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
+
+  <div class="relative z-10 max-w-5xl mx-auto px-4 md:px-8 h-full flex flex-col justify-end pb-8">
+    <div class="flex items-center gap-2 mb-3">
+      <span class="px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/90 text-white uppercase tracking-wide">
+        {{ p.categories[0] || 'Lieu' }}
+      </span>
+
+      <span
+        class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold"
+        [ngClass]="{
+          'bg-yellow-400 text-gray-900': p.status === 'pending',
+          'bg-green-500 text-white': p.status === 'approved',
+          'bg-red-500 text-white': p.status === 'rejected'
+        }"
+      >
+        <ng-container [ngSwitch]="p.status">
+          <span *ngSwitchCase="'pending'">⏳ En attente</span>
+          <span *ngSwitchCase="'approved'">✅ Validé</span>
+          <span *ngSwitchCase="'rejected'">❌ Rejeté</span>
+          <span *ngSwitchDefault>ℹ️ Statut inconnu</span>
+        </ng-container>
+      </span>
+    </div>
+
+    <h1 class="text-3xl md:text-4xl font-extrabold text-white mb-3 drop-shadow-lg">
+      {{ p.name }}
+    </h1>
+
+    <div class="flex flex-wrap items-center gap-3 text-sm text-gray-100">
+      <div class="flex items-center gap-1" *ngIf="averageRating !== null">
+        <span class="text-yellow-300">★</span>
+        <span class="font-semibold">{{ averageRating }}</span>
+        <span class="text-gray-300">/ 5</span>
+        <span class="text-gray-300">•</span>
+        <span>{{ commentsCount }} avis</span>
+      </div>
+
+      <div class="flex flex-wrap gap-2">
+        <span
+          *ngFor="let cat of p.categories"
+          class="px-2 py-0.5 rounded-full bg-white/15 border border-white/20 text-xs"
+        >
+          {{ cat }}
+        </span>
+      </div>
+    </div>
+  </div>
+</div>

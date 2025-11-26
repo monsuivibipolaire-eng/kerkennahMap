@@ -1,0 +1,63 @@
+<div class="fixed inset-0 z-40 flex items-center justify-center bg-black/50">
+  <div class="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 p-6 space-y-4">
+    <h2 class="text-lg font-semibold text-gray-900 mb-2">Modifier le lieu</h2>
+
+    <form class="space-y-4" (ngSubmit)="onSubmit()">
+      <div class="space-y-1">
+        <label class="block text-sm font-medium text-gray-700">Nom</label>
+        <input
+          class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+          [(ngModel)]="place!.name"
+          name="name"
+          required
+        />
+      </div>
+
+      <div class="space-y-1">
+        <label class="block text-sm font-medium text-gray-700">Description</label>
+        <textarea
+          class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+          rows="4"
+          [(ngModel)]="place!.description"
+          name="description"
+        ></textarea>
+      </div>
+
+      <div class="space-y-1">
+        <label class="block text-sm font-medium text-gray-700">Catégories</label>
+        <select
+          multiple
+          class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+          [(ngModel)]="place!.categories"
+          name="categories"
+        >
+          <option *ngFor="let c of categories" [ngValue]="c">{{ c }}</option>
+        </select>
+      </div>
+
+      <div *ngIf="uploadError" class="text-xs text-red-600">
+        {{ uploadError }}
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <button
+          type="button"
+          class="px-3 py-1.5 rounded-md border border-gray-300 text-sm"
+          (click)="onCancel()"
+        >
+          Annuler
+        </button>
+        <button
+          type="submit"
+          class="px-4 py-1.5 rounded-md bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60"
+          [disabled]="isSaving"
+        >
+          <ng-container *ngIf="!isSaving; else savingTpl">
+            Enregistrer
+          </ng-container>
+          <ng-template #savingTpl>Enregistrement...</ng-template>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
