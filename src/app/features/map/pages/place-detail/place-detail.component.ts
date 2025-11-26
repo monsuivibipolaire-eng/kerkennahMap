@@ -47,6 +47,7 @@ export class PlaceDetailComponent implements OnInit {
   isAdmin = false;
   isLoggedIn = false;
   currentUserName: string | null = null;
+  currentPlaceId: string | null = null;
 
   // Modal édition
   showEditModal = false;
@@ -129,7 +130,7 @@ export class PlaceDetailComponent implements OnInit {
         this.isLoggedIn = !!user;
         if (user) {
           this.currentUserName =
-            user.fullName || user.name || user.email || 'Utilisateur';
+            user.fullName || user.name || 'Utilisateur';
 
           if (Array.isArray(user.roles)) {
             this.isAdmin = user.roles.includes('admin');
