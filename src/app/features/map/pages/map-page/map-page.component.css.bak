@@ -1,0 +1,118 @@
+.map-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.map-wrapper {
+  flex: 1 1 auto;
+}
+
+/* === LEAFLET === */
+::ng-deep .leaflet-container {
+  height: 100%;
+}
+
+/* === MARKERS PERSONNALISÉS === */
+::ng-deep .custom-div-icon {
+  display: inline-block;
+}
+
+/* Conteneur du label + pointeur */
+::ng-deep .marker-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Nom du village au-dessus du pointeur */
+::ng-deep .marker-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #111827;
+  padding: 2px 6px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(209, 213, 219, 0.9);
+  margin-bottom: 2px;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}
+
+/* Pointeur principal */
+::ng-deep .marker-pin {
+  width: 32px;
+  height: 40px;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 12px rgba(15,23,42,0.35);
+}
+
+/* Emoji qui remplit bien l'espace */
+::ng-deep .marker-emoji {
+  font-size: 24px;
+  line-height: 1;
+}
+
+/* Couleurs par type */
+::ng-deep .marker-pin.village   { background: #0ea5e9; }
+::ng-deep .marker-pin.sante     { background: #e11d48; }
+::ng-deep .marker-pin.ecole     { background: #2563eb; }
+::ng-deep .marker-pin.restaurant{ background: #f97316; }
+::ng-deep .marker-pin.cafe      { background: #7c2d12; }
+::ng-deep .marker-pin.hotel     { background: #a855f7; }
+::ng-deep .marker-pin.plage     { background: #22c55e; }
+::ng-deep .marker-pin.port      { background: #0f766e; }
+::ng-deep .marker-pin.culture   { background: #4b5563; }
+::ng-deep .marker-pin.commerce  { background: #f59e0b; }
+::ng-deep .marker-pin.default   { background: #6b7280; }
+
+/* === POPUPS (optionnel) === */
+::ng-deep .popup-image {
+  width: 100% !important;
+  height: 130px !important;
+  object-fit: cover;
+  border-radius: 6px;
+  background-color: #f3f4f6;
+  margin-bottom: 10px;
+  border: 1px solid #e5e7eb;
+}
+
+::ng-deep .leaflet-popup-content {
+  width: 220px !important;
+  margin: 12px !important;
+}
+
+::ng-deep .popup-chip {
+  position: absolute;
+  bottom: 10px;
+  right: 8px;
+  background: rgba(255,255,255,0.92);
+  padding: 2px 6px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #4b5563;
+  border: 1px solid rgba(209,213,219,0.9);
+}
+
+::ng-deep .popup-btn {
+  margin-top: 10px;
+  background: #2563eb;
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  box-shadow: 0 4px 8px rgba(37,99,235,0.35);
+}
+::ng-deep .popup-btn:hover {
+  background: #1d4ed8;
+}

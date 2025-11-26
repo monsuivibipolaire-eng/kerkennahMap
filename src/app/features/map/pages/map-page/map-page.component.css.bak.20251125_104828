@@ -1,0 +1,83 @@
+:host { display: block; height: 100%; }
+
+/* Popup Image Styles */
+::ng-deep .popup-image {
+  width: 100% !important;
+  height: 130px !important;
+  object-fit: cover;
+  border-radius: 6px;
+  background-color: #f3f4f6;
+  margin-bottom: 10px;
+  border: 1px solid #e5e7eb;
+}
+::ng-deep .leaflet-popup-content { 
+  width: 220px !important; 
+  margin: 12px !important; 
+}
+::ng-deep .leaflet-popup-content-wrapper {
+  border-radius: 10px;
+  overflow: hidden;
+  padding: 0;
+}
+
+/* --- CUSTOM MARKER STYLES --- */
+::ng-deep .custom-div-icon {
+  background: transparent;
+  border: none;
+}
+
+::ng-deep .marker-pin {
+  width: 42px;
+  height: 42px;
+  border-radius: 50% 50% 50% 0;
+  position: absolute;
+  transform: rotate(-45deg);
+  left: 50%;
+  top: 50%;
+  margin: -21px 0 0 -21px;
+  box-shadow: 2px 4px 8px rgba(0,0,0,0.4); /* Ombre portée plus marquée */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid white; /* Bordure blanche épaisse */
+  transition: transform 0.2s ease;
+}
+
+/* Effet au survol (optionnel si interactif) */
+::ng-deep .marker-pin:hover {
+  transform: rotate(-45deg) scale(1.1);
+  z-index: 1000;
+}
+
+/* --- PALETTE DE COULEURS --- */
+/* Rouge vif */
+::ng-deep .marker-pin.restaurant { background: #ef4444; }
+/* Violet/Indigo */
+::ng-deep .marker-pin.hotel { background: #6366f1; }
+/* Jaune Soleil */
+::ng-deep .marker-pin.plage { background: #f59e0b; }
+/* Marron Café */
+::ng-deep .marker-pin.cafe { background: #78350f; }
+/* Cyan Océan */
+::ng-deep .marker-pin.port { background: #06b6d4; }
+/* Vert Émeraude (Culture/Mosquée) */
+::ng-deep .marker-pin.culture { background: #10b981; }
+/* Bleu Roi (École/Admin) */
+::ng-deep .marker-pin.ecole { background: #2563eb; }
+/* Rose/Rouge (Santé) */
+::ng-deep .marker-pin.sante { background: #e11d48; }
+/* Gris (Par défaut) */
+::ng-deep .marker-pin.default { background: #64748b; }
+
+/* Correction de l'orientation de l'emoji à l'intérieur */
+::ng-deep .marker-pin span {
+  transform: rotate(45deg);
+  font-size: 22px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.1));
+}
+
+/* Marqueur "village" (Vert) */
+::ng-deep .marker-pin.village {
+  background: #16a34a;
+}

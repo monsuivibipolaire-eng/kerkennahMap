@@ -1,0 +1,295 @@
+import { Component, OnInit, OnDestroy } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { LeafletModule } from '@bluehalo/ngx-leaflet';
+import { Router, RouterModule } from '@angular/router';
+import { FormsModule } from '@angular/forms';
+import * as L from 'leaflet';
+import { PlacesService } from '../../../../core/services/places.service';
+import { Place } from '../../../../core/models/place.model';
+import { Subscription } from 'rxjs';
+
+interface Village {
+  name: string;
+  latitude: number;
+  longitude: number;
+}
+
+interface PlaceMarker {
+  place: Place;
+  marker: L.Marker;
+  category: string;
+}
+
+interface VillageMarker {
+  name: string;
+  marker: L.Marker;
+}
+
+@Component({
+  selector: 'app-map-page',
+  standalone: true,
+  imports: [CommonModule, LeafletModule, RouterModule, FormsModule],
+  templateUrl: './map-page.component.html',
+  styleUrls: ['./map-page.component.css']
+})
+export class MapPageComponent implements OnInit, OnDestroy {
+
+  // Options Leaflet : centré sur Kerkennah
+  options: L.MapOptions = {
+    center: L.latLng(34.73, 11.25),
+    zoom: 11,
+    minZoom: 10,
+    maxZoom: 18,
+    zoomControl: false,
+    layers: [
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      })
+    ]
+  };
+
+  // Couches affichées sur la carte
+  layers: L.Layer[] = [];
+
+  // Données
+  places: Place[] = [];
+  filteredPlaces: Place[] = []; // lieux visibles (dans la zone + filtre)
+
+  private sub = new Subscription();
+  private map?: L.Map;
+
+  // Marqueurs
+  private villageMarkers: VillageMarker[] = [];
+  private placeMarkers: PlaceMarker[] = [];
+
+  // Villages de l'île de Kerkennah (approximatifs)
+  private readonly kerkennahVillages: Village[] = [
+    { name: 'Remla',       latitude: 34.744, longitude: 11.262 },
+    { name: 'El Attaya',   latitude: 34.828, longitude: 11.283 },
+    { name: 'Ouled Yaneg', latitude: 34.692, longitude: 11.195 },
+    { name: 'Sidi Fredj',  latitude: 34.707, longitude: 11.255 }
+    // Tu peux en ajouter d'autres ici
+  ];
+
+  // Filtre catégorie
+  selectedCategory = 'all';
+
+  categoriesList = [
+    { key: 'all',      label: 'Toutes les catégories',         icon: '🌍' },
+    { key: 'village',  label: 'Villages de Kerkennah',         icon: '🏘️' },
+    { key: 'hotel',    label: 'Hébergements',                  icon: '🏨' },
+    { key: 'restaurant', label: 'Restaurants & snacks',        icon: '🍽️' },
+    { key: 'cafe',     label: 'Cafés & salons de thé',         icon: '☕' },
+    { key: 'plage',    label: 'Plages & baignades',            icon: '🏖️' },
+    { key: 'port',     label: 'Ports & pêche',                 icon: '⚓' },
+    { key: 'sante',    label: 'Santé',                         icon: '🏥' },
+    { key: 'culture',  label: 'Culture & religion',            icon: '🕌' },
+    { key: 'ecole',    label: 'Écoles / Admin / Commerce',     icon: '🏢' }
+  ];
+
+  constructor(
+    private placesService: PlacesService,
+    private router: Router
+  ) {}
+
+  // Au chargement : on récupère les lieux approuvés
+  ngOnInit(): void {
+    this.sub = this.placesService.getApprovedPlaces().subscribe(places => {
+      this.places = places;
+      this.buildPlaceMarkers();
+      this.updateLayers();
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.sub.unsubscribe();
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //  CATÉGORISATION & ICONES
+  // ─────────────────────────────────────────────────────────────
+
+  private mapCategory(categories: string[] = []): { key: string; emoji: string } {
+    let type = 'default';
+    let emoji = '📍';
+
+    const c = (categories || []).map(x => x.toLowerCase()).join(' ');
+
+    if (c.includes('village')) {
+      type = 'village';
+      emoji = '🏘️';
+    }
+    // Santé & urgences
+    else if (c.includes('pharmacie') || c.includes('hôpital') || c.includes('hopital')
+      || c.includes('santé') || c.includes('urgences')) {
+      type = 'sante'; emoji = '🏥';
+    }
+    // École / admin / commerce
+    else if (c.includes('école') || c.includes('ecole') || c.includes('lycée') || c.includes('lycee')
+      || c.includes('college') || c.includes('collège')
+      || c.includes('poste') || c.includes('mairie') || c.includes('ville')
+      || c.includes('commerce') || c.includes('épicerie') || c.includes('epicerie')
+      || c.includes('magasin') || c.includes('marché') || c.includes('marche')) {
+      type = 'ecole'; emoji = '🏢';
+    }
+    // Restauration
+    else if (c.includes('restaurant') || c.includes('snack') || c.includes('pizzeria') || c.includes('fast food')) {
+      type = 'restaurant'; emoji = '🍽️';
+    }
+    else if (c.includes('café') || c.includes('cafe') || c.includes('salon de thé') || c.includes('buvette')) {
+      type = 'cafe'; emoji = '☕';
+    }
+    // Hébergement
+    else if (c.includes('hôtel') || c.includes('hotel') || c.includes('résidence') || c.includes('residence')
+      || c.includes("maison d'hôtes") || c.includes("maison d hotes")) {
+      type = 'hotel'; emoji = '🏨';
+    }
+    // Plages / nature
+    else if (c.includes('plage') || c.includes('baignade') || c.includes('mer')) {
+      type = 'plage'; emoji = '🏖️';
+    }
+    // Ports / pêche
+    else if (c.includes('port') || c.includes('pêche') || c.includes('peche') || c.includes('bateau')) {
+      type = 'port'; emoji = '⚓';
+    }
+    // Culture / religion / patrimoine
+    else if (c.includes('mosquée') || c.includes('mosquee') || c.includes('zaouia')
+      || c.includes('histoire') || c.includes('musée') || c.includes('musee')
+      || c.includes('ruine') || c.includes('site')) {
+      type = 'culture'; emoji = '🕌';
+    }
+
+    return { key: type, emoji };
+  }
+
+  private createIcon(categories: string[] = []): L.DivIcon {
+    const { key, emoji } = this.mapCategory(categories);
+    return L.divIcon({
+      className: 'custom-div-icon',
+      html: `<div class="marker-pin ${key}"><span>${emoji}</span></div>`,
+      iconSize: [42, 42],
+      iconAnchor: [21, 42],
+      popupAnchor: [0, -45]
+    });
+  }
+
+  getCategoryEmoji(categories: string[] = []): string {
+    return this.mapCategory(categories).emoji;
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //  CONSTRUCTION DES MARQUEURS
+  // ─────────────────────────────────────────────────────────────
+
+  private buildVillageMarkers(): void {
+    if (this.villageMarkers.length > 0) return;
+
+    this.villageMarkers = this.kerkennahVillages.map(v => {
+      const marker = L.marker([v.latitude, v.longitude], {
+        icon: this.createIcon(['village'])
+      }).bindPopup(
+        `<strong>${v.name}</strong><br/>Village de Kerkennah`
+      );
+
+      return { name: v.name, marker };
+    });
+  }
+
+  private buildPlaceMarkers(): void {
+    if (!this.places || this.places.length === 0) return;
+
+    this.placeMarkers = this.places.map(p => {
+      const { key } = this.mapCategory(p.categories || []);
+
+      const marker = L.marker([p.latitude, p.longitude], {
+        icon: this.createIcon(p.categories || [])
+      });
+
+      marker.bindPopup(`
+        <div class="popup-content">
+          <strong>${p.name}</strong><br/>
+          <small>${(p.categories || []).join(', ')}</small><br/>
+          <button id="btn-${p.id}" class="popup-btn">Voir la fiche</button>
+        </div>
+      `);
+
+      marker.on('popupopen', () => {
+        const btn = document.getElementById(`btn-${p.id}`);
+        if (btn) {
+          btn.addEventListener('click', () => this.router.navigate(['/place', p.id]));
+        }
+      });
+
+      return { place: p, marker, category: key };
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //  ZOOM / BOUNDS / FILTRE CATÉGORIE
+  // ─────────────────────────────────────────────────────────────
+
+  private updateLayers(): void {
+    if (!this.map) return;
+
+    const bounds = this.map.getBounds();
+    const zoom = this.map.getZoom();
+
+    // Villages visibles dans la zone actuelle
+    const visibleVillageLayers = this.villageMarkers
+      .filter(vm => bounds.contains(vm.marker.getLatLng()))
+      .map(vm => vm.marker);
+
+    // Lieux visibles selon zoom + catégorie + bounds
+    const MIN_ZOOM_FOR_PLACES = 13;
+
+    const visiblePlaceMarkers = this.placeMarkers.filter(pm => {
+      // Si on filtre sur "village" → aucun lieu
+      if (this.selectedCategory === 'village') {
+        return false;
+      }
+
+      if (this.selectedCategory !== 'all' && pm.category !== this.selectedCategory) {
+        return false;
+      }
+
+      if (zoom < MIN_ZOOM_FOR_PLACES) {
+        return false;
+      }
+
+      return bounds.contains(pm.marker.getLatLng());
+    });
+
+    this.layers = [
+      ...visibleVillageLayers,
+      ...visiblePlaceMarkers.map(pm => pm.marker)
+    ];
+
+    // Lieux visibles pour la sidebar
+    this.filteredPlaces = visiblePlaceMarkers.map(pm => pm.place);
+  }
+
+  onCategoryChange(): void {
+    this.updateLayers();
+  }
+
+  // Clique sur un élément de la liste (sidebar)
+  focusPlace(place: Place): void {
+    if (!this.map) return;
+    this.map.setView([place.latitude, place.longitude], Math.max(this.map.getZoom(), 14));
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //  LEAFLET : carte prête
+  // ─────────────────────────────────────────────────────────────
+
+  onMapReady(map: L.Map): void {
+    this.map = map;
+
+    this.buildVillageMarkers();
+    this.buildPlaceMarkers();
+    this.updateLayers();
+
+    // À chaque zoom / déplacement → recalcul des markers visibles
+    this.map.on('zoomend moveend', () => this.updateLayers());
+  }
+}

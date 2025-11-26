@@ -1,0 +1,15 @@
+<div class="map-page">
+  <div class="map-toolbar">
+    <button class="toggle-btn" (click)="toggleShowAll()">
+      {{ showAllPlaces ? 'Cacher tous les pointeurs' : 'Afficher tous les pointeurs' }}
+    </button>
+  </div>
+
+  <div
+    class="map-wrapper"
+    leaflet
+    [leafletOptions]="options"
+    [leafletLayers]="layers"
+    (leafletMapReady)="onMapReady($event)">
+  </div>
+</div>

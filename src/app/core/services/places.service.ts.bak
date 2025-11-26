@@ -1,0 +1,87 @@
+import { Injectable, inject } from '@angular/core';
+import {
+  Firestore,
+  collection,
+  collectionData,
+  doc,
+  docData,
+  addDoc,
+  query,
+  where,
+  updateDoc,
+  deleteDoc
+} from '@angular/fire/firestore';
+import { Observable } from 'rxjs';
+import { Place } from '../models/place.model';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class PlacesService {
+  private firestore: Firestore = inject(Firestore);
+
+  constructor() {}
+
+  // Lieux approuvés (affichés sur la carte)
+  getApprovedPlaces(): Observable<Place[]> {
+    const placesRef = collection(this.firestore, 'places');
+    const q = query(placesRef, where('status', '==', 'approved'));
+    return collectionData(q, { idField: 'id' }) as Observable<Place[]>;
+  }
+
+  // Lieu par ID
+  getPlaceById(id: string): Observable<Place | undefined> {
+    const placeDocRef = doc(this.firestore, `places/${id}`);
+    return docData(placeDocRef, { idField: 'id' }) as Observable<Place>;
+  }
+
+  // ➕ Ajouter un lieu
+  addPlace(place: Place): Promise<any> {
+    const placesRef = collection(this.firestore, 'places');
+    return addDoc(placesRef, place);
+  }
+
+  // ✏️ Mise à jour générique
+  updatePlace(id: string, data: Partial<Place>): Promise<void> {
+    const placeDocRef = doc(this.firestore, `places/${id}`);
+    return updateDoc(placeDocRef, data as any);
+  }
+
+  // 🗑 Supprimer un lieu
+  deletePlace(id: string): Promise<void> {
+    const placeDocRef = doc(this.firestore, `places/${id}`);
+    return deleteDoc(placeDocRef);
+  }
+
+  // 🕒 Lieux en attente (pour admin)
+  getPendingPlaces(): Observable<Place[]> {
+    const placesRef = collection(this.firestore, 'places');
+    const q = query(placesRef, where('status', '==', 'pending'));
+    return collectionData(q, { idField: 'id' }) as Observable<Place[]>;
+  }
+
+  // 👤 Lieux créés par un utilisateur donné (pour non-admin)
+  getPlacesByUser(userId: string): Observable<Place[]> {
+    const placesRef = collection(this.firestore, 'places');
+    const q = query(placesRef, where('createdBy', '==', userId));
+    return collectionData(q, { idField: 'id' }) as Observable<Place[]>;
+  }
+
+  // ✅ Approuver un lieu (admin)
+  approvePlace(id: string, adminId: string): Promise<void> {
+    return this.updatePlace(id, {
+      status: 'approved',
+      validatedBy: adminId,
+      validatedAt: new Date(),
+      updatedAt: new Date()
+    });
+  }
+
+  // ❌ Rejeter un lieu (admin)
+  rejectPlace(id: string): Promise<void> {
+    return this.updatePlace(id, {
+      status: 'rejected',
+      updatedAt: new Date()
+    });
+  }
+}

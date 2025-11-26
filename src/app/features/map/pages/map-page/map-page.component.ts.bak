@@ -1,0 +1,214 @@
+import { Component, OnInit, OnDestroy } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { LeafletModule } from '@bluehalo/ngx-leaflet';
+import { Router, RouterModule } from '@angular/router';
+import * as L from 'leaflet';
+import { PlacesService } from '../../../../core/services/places.service';
+import { Place } from '../../../../core/models/place.model';
+import { Subscription } from 'rxjs';
+
+@Component({
+  selector: 'app-map-page',
+  standalone: true,
+  imports: [CommonModule, LeafletModule, RouterModule],
+  templateUrl: './map-page.component.html',
+  styleUrls: ['./map-page.component.css']
+})
+export class MapPageComponent implements OnInit, OnDestroy {
+
+  // Carte centrée sur Kerkennah
+  options: L.MapOptions = {
+    layers: [
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18
+      })
+    ],
+    zoom: 11,
+    center: L.latLng(34.71, 11.15)
+  };
+
+  places: Place[] = [];
+  layers: L.Layer[] = [];
+
+  private sub = new Subscription();
+  private map?: L.Map;
+
+  // Seuil de zoom pour afficher les lieux (non-villages)
+  private readonly zoomLevelToShowPlaces = 13;
+
+  // Markers pré-créés
+  private allMarkers: { place: Place; marker: L.Marker }[] = [];
+  private villageMarkers: { place: Place; marker: L.Marker }[] = [];
+  private otherMarkers: { place: Place; marker: L.Marker }[] = [];
+
+  constructor(
+    private placesService: PlacesService,
+    private router: Router
+  ) {}
+
+  ngOnInit(): void {
+    this.sub = this.placesService.getApprovedPlaces().subscribe(data => {
+      this.places = data;
+      this.buildMarkers();
+      // Au départ : seulement les villages
+      this.layers = this.villageMarkers.map(x => x.marker);
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.sub.unsubscribe();
+  }
+
+  /**
+   * Est-ce un village ?
+   * 👉 On ne garde que les catégories EXACTEMENT 'village'
+   */
+  private isVillage(p: Place): boolean {
+    const cats = (p.categories || []).map(c => c.toLowerCase().trim());
+    return cats.includes('village');
+  }
+
+  /**
+   * Type + emoji selon la catégorie
+   */
+  private getTypeAndEmoji(p: Place, isVillage: boolean): { type: string; emoji: string } {
+    const c = (p.categories || []).map(x => x.toLowerCase()).join(' ');
+
+    let type = isVillage ? 'village' : 'default';
+    let emoji = isVillage ? '🏘️' : '📍';
+
+    if (c.match(/pharmacie|h[ôo]pital|sant[eé]|urgence/)) { type = 'sante'; emoji = '🏥'; }
+    else if (c.match(/école|ecole|lycée|lycee|coll[eè]ge|college|poste|mairie/)) { type = 'ecole'; emoji = '🎓'; }
+    else if (c.match(/restaurant|snack|pizzeria|fast food/)) { type = 'restaurant'; emoji = '🍽️'; }
+    else if (c.match(/café|cafe|salon de th[eé]|buvette/)) { type = 'cafe'; emoji = '☕'; }
+    else if (c.match(/h[ôo]tel|hotel|r[eé]sidence|maison d'h[ôo]tes/)) { type = 'hotel'; emoji = '🏨'; }
+    else if (c.match(/plage|baignade|mer/)) { type = 'plage'; emoji = '🏖️'; }
+    else if (c.match(/port|p[eê]che|bateau/)) { type = 'port'; emoji = '⚓'; }
+    else if (c.match(/mosqu[eé]e|zaouia|histoire|mus[eé]e|ruine|site/)) { type = 'culture'; emoji = '🏛️'; }
+    else if (c.match(/commerce|[ée]picerie|magasin|march[eé]/)) { type = 'commerce'; emoji = '🛒'; }
+
+    return { type, emoji };
+  }
+
+  /**
+   * Crée l'icône (DivIcon) avec nom du village au-dessus quand c'est un village.
+   * 📍 L'ancre (iconAnchor) est en bas au centre du pointeur.
+   */
+  private createIcon(p: Place, isVillage: boolean): L.DivIcon {
+    const { type, emoji } = this.getTypeAndEmoji(p, isVillage);
+
+    const labelHtml = isVillage
+      ? `<div class="marker-label">${p.name}</div>`
+      : '';
+
+    return L.divIcon({
+      className: 'custom-div-icon',
+      html: `
+        <div class="marker-wrapper">
+          ${labelHtml}
+          <div class="marker-pin ${type}">
+            <span class="marker-emoji">${emoji}</span>
+          </div>
+        </div>
+      `,
+      // taille = village label + pointeur
+      iconSize: [40, 56],
+      // ancre = bas au centre du pointeur
+      iconAnchor: [20, 56],
+      popupAnchor: [0, -54]
+    });
+  }
+
+  /**
+   * Crée le marker pour un lieu donné
+   */
+  private createMarkerForPlace(p: Place, isVillage: boolean): L.Marker {
+    const marker = L.marker([p.latitude, p.longitude], {
+      icon: this.createIcon(p, isVillage)
+    });
+
+    const img =
+      p.images && p.images.length > 0
+        ? p.images[0]
+        : 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/No_image_available.svg/300px-No_image_available.svg.png';
+
+    marker.bindPopup(`
+      <div class="text-center font-sans">
+        <h3 class="font-bold text-base text-gray-800 mb-2 truncate">${p.name}</h3>
+        <div class="relative">
+          <img src="${img}" class="popup-image"
+               onerror="this.src='https://via.placeholder.com/300?text=Image+Indisponible'">
+          <span class="popup-chip">
+            ${(p.categories && p.categories[0]) || 'Lieu'}
+          </span>
+        </div>
+        <button id="btn-${p.id}"
+          class="popup-btn">
+          <span>👁️</span> Voir détails
+        </button>
+      </div>
+    `);
+
+    marker.on('popupopen', () => {
+      const btn = document.getElementById(`btn-${p.id}`);
+      if (btn) {
+        btn.addEventListener('click', () => this.router.navigate(['/place', p.id]));
+      }
+    });
+
+    return marker;
+  }
+
+  /**
+   * Prépare tous les marqueurs (une seule fois)
+   */
+  private buildMarkers(): void {
+    this.allMarkers = this.places.map(p => {
+      const v = this.isVillage(p);
+      return { place: p, marker: this.createMarkerForPlace(p, v) };
+    });
+
+    this.villageMarkers = this.allMarkers.filter(x => this.isVillage(x.place));
+    this.otherMarkers   = this.allMarkers.filter(x => !this.isVillage(x.place));
+  }
+
+  /**
+   * Met à jour les layers :
+   *  - Zoom < seuil  -> seulement villages
+   *  - Zoom >= seuil -> villages + lieux non-villages dans la région visible
+   */
+  private updateLayers(): void {
+    if (!this.map) {
+      this.layers = this.villageMarkers.map(x => x.marker);
+      return;
+    }
+
+    const zoom = this.map.getZoom();
+    const bounds = this.map.getBounds();
+
+    // Zoom out : on cache les lieux non-villages
+    if (zoom < this.zoomLevelToShowPlaces) {
+      this.layers = this.villageMarkers.map(x => x.marker);
+      return;
+    }
+
+    // Zoom in : on affiche les lieux non-villages dans la zone visible
+    const visibleOthers = this.otherMarkers.filter(x =>
+      bounds.contains([x.place.latitude, x.place.longitude])
+    ).map(x => x.marker);
+
+    this.layers = [
+      ...this.villageMarkers.map(x => x.marker),
+      ...visibleOthers
+    ];
+  }
+
+  /**
+   * Leaflet map ready
+   */
+  onMapReady(map: L.Map) {
+    this.map = map;
+    this.map.on('zoomend moveend', () => this.updateLayers());
+    this.updateLayers();
+  }
+}

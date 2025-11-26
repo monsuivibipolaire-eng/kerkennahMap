@@ -1,29 +1,419 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-# === CONFIGURATION ===
-# Mets "true" si tu veux supprimer les .spec.ts
-DELETE_SPECS=false
+ROOT="$(cd "$(dirname "$0")" && pwd)"
 
-echo "Nettoyage des fichiers inutiles..."
+HTML="$ROOT/src/app/features/map/pages/place-detail/place-detail.component.html"
+TS="$ROOT/src/app/features/map/pages/place-detail/place-detail.component.ts"
 
-
-echo "Suppression des fichiers *.bak.* ..."
-find ./src -type f -name "*.bak.*" -print -delete
-
-echo "Suppression des fichiers *.backup.* ..."
-find ./src -type f -name "*.backup.*" -print -delete
-
-echo "Suppression des fichiers temporaires *~ ..."
-find ./src -type f -name "*~" -print -delete
-
-echo "Suppression des fichiers swap (.swp / .swo) ..."
-find ./src -type f \( -name "*.swp" -o -name "*.swo" \) -print -delete
-
-if [ "$DELETE_SPECS" = true ]; then
-  echo "Suppression des fichiers .spec.ts ..."
-  find ./src -type f -name "*.spec.ts" -print -delete
-else
-  echo "Les fichiers .spec.ts ne seront PAS supprimés."
+echo "🔍 Vérification des fichiers..."
+if [[ ! -f "$HTML" || ! -f "$TS" ]]; then
+  echo "❌ place-detail.component.{html,ts} introuvables à partir de $ROOT"
+  exit 1
 fi
 
-echo "Nettoyage terminé."
+############################################
+# 1) FIX DU TEMPLATE HTML (warnings NG8107)
+############################################
+
+echo "⚙️ Correction du HTML..."
+
+# NG8107 1 : {{ place.images?.length || 0 }} → {{ place.images.length || 0 }}
+# NG8107 2/3 : editingPlace.categories?.includes(cat) → editingPlace.categories.includes(cat)
+sed -i.bak \
+  -e 's/{{ place.images?.length || 0 }}/{{ place.images.length || 0 }}/g' \
+  -e 's/editingPlace.categories?.includes(cat)/editingPlace.categories.includes(cat)/g' \
+  "$HTML"
+
+rm -f "$HTML.bak"
+
+echo "✔️ HTML corrigé."
+
+############################################
+# 2) REMPLACEMENT COMPLET DU TS
+############################################
+
+echo "⚙️ Réécriture de place-detail.component.ts..."
+
+cat <<'EOF' > "$TS"
+import { Component, OnInit, inject } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { ActivatedRoute, RouterModule, Router } from '@angular/router';
+import { LeafletModule } from '@bluehalo/ngx-leaflet';
+import * as L from 'leaflet';
+import { Observable, of } from 'rxjs';
+import { switchMap, tap } from 'rxjs/operators';
+import { FormsModule } from '@angular/forms';
+
+import { PlacesService } from '../../../../core/services/places.service';
+import { Place } from '../../../../core/models/place.model';
+import { SupabaseImageService } from '../../../../core/services/supabase-image.service';
+
+@Component({
+  selector: 'app-place-detail',
+  standalone: true,
+  imports: [CommonModule, RouterModule, LeafletModule, FormsModule],
+  templateUrl: './place-detail.component.html',
+  styleUrls: ['./place-detail.component.css']
+})
+export class PlaceDetailComponent implements OnInit {
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+  private placesService = inject(PlacesService);
+  private supabaseImageService = inject(SupabaseImageService);
+
+  // Place affichée
+  place$: Observable<Place | undefined> = of(undefined);
+
+  // Admin ? (par défaut true pour que tu voies les boutons)
+  isAdmin = true;
+
+  // Modal édition
+  showEditModal = false;
+  editingPlace: Place | null = null;
+
+  // Upload états
+  uploadingImages = false;
+  uploadingVideos = false;
+  uploadError: string | null = null;
+
+  // Galerie plein écran
+  showMediaViewer = false;
+  mediaViewerItems: { type: 'image' | 'video'; src: string }[] = [];
+  mediaViewerIndex = 0;
+
+  // Liste de catégories disponibles
+  availableCategories: string[] = [
+    'Restaurant',
+    'Fruits de mer',
+    'Café',
+    'Fast-food',
+    'Pizzeria',
+    'Boulangerie',
+    'Glacier',
+    'Bar',
+    'Hôtel',
+    'Hébergement',
+    'Activité',
+    'Culture',
+    'Sport',
+    'Shopping',
+    'Autre'
+  ];
+
+  // Config Leaflet
+  mapOptions: L.MapOptions = {
+    layers: [
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18
+      })
+    ],
+    zoom: 14,
+    center: L.latLng(34.71, 11.15)
+  };
+
+  mapLayers: L.Layer[] = [];
+
+  constructor() {
+    // Patch icônes Leaflet (pour éviter les problèmes de bundling)
+    const iconRetinaUrl =
+      'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png';
+    const iconUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png';
+    const shadowUrl =
+      'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png';
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (L.Marker as any).prototype.options.icon = L.icon({
+      iconRetinaUrl,
+      iconUrl,
+      shadowUrl,
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41]
+    });
+  }
+
+  ngOnInit(): void {
+    // Récupérer la place
+    this.place$ = this.route.paramMap.pipe(
+      switchMap((params) => {
+        const id = params.get('id');
+        if (!id) {
+          return of(undefined);
+        }
+        return this.placesService.getPlaceById(id).pipe(
+          tap((place) => {
+            if (place) {
+              this.updateMap(place);
+            }
+          })
+        );
+      })
+    );
+  }
+
+  private updateMap(place: Place) {
+    if (place.latitude && place.longitude) {
+      this.mapOptions = {
+        ...this.mapOptions,
+        center: L.latLng(place.latitude, place.longitude)
+      };
+
+      this.mapLayers = [
+        L.marker([place.latitude, place.longitude]).bindPopup(place.name)
+      ];
+    }
+  }
+
+  // -------- MODAL ÉDITION --------
+
+  openEditModal(place: Place) {
+    this.uploadError = null;
+    this.uploadingImages = false;
+    this.uploadingVideos = false;
+
+    // On clone la place pour ne pas modifier l'original tant que ce n'est pas sauvegardé
+    this.editingPlace = {
+      ...place,
+      images: [...(place.images || [])],
+      videos: [...(place.videos || [])],
+      categories: [...(place.categories || [])]
+    };
+    this.showEditModal = true;
+  }
+
+  closeEditModal() {
+    this.showEditModal = false;
+    this.editingPlace = null;
+    this.uploadError = null;
+    this.uploadingImages = false;
+    this.uploadingVideos = false;
+  }
+
+  // -------- CATEGORIES --------
+
+  toggleCategory(category: string) {
+    if (!this.editingPlace) return;
+
+    const categories = this.editingPlace.categories || [];
+    const index = categories.indexOf(category);
+    if (index > -1) {
+      categories.splice(index, 1);
+    } else {
+      categories.push(category);
+    }
+    this.editingPlace = {
+      ...this.editingPlace,
+      categories: [...categories]
+    };
+  }
+
+  // -------- IMAGES --------
+
+  async onImagesSelected(event: Event) {
+    if (!this.editingPlace) return;
+
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) return;
+
+    const files = Array.from(input.files);
+
+    this.uploadingImages = true;
+    this.uploadError = null;
+
+    try {
+      const baseId = this.editingPlace.id || 'temp';
+      const uploadPromises = files.map((file, index) =>
+        this.supabaseImageService.uploadImage(
+          file,
+          `places/${baseId}/images/${Date.now()}-${index}-${file.name}`
+        )
+      );
+
+      const results = await Promise.all(uploadPromises);
+      const urls = results.filter((u): u is string => !!u);
+
+      const existing = this.editingPlace.images || [];
+      this.editingPlace = {
+        ...this.editingPlace,
+        images: [...existing, ...urls]
+      };
+    } catch (err) {
+      console.error('Erreur upload images', err);
+      this.uploadError = "Erreur lors de l'upload des images.";
+    } finally {
+      this.uploadingImages = false;
+    }
+  }
+
+  removeImage(index: number) {
+    if (!this.editingPlace) return;
+    const images = [...(this.editingPlace.images || [])];
+    images.splice(index, 1);
+    this.editingPlace = {
+      ...this.editingPlace,
+      images
+    };
+  }
+
+  // -------- VIDEOS --------
+
+  async onVideosSelected(event: Event) {
+    if (!this.editingPlace) return;
+
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) return;
+
+    const files = Array.from(input.files);
+
+    this.uploadingVideos = true;
+       this.uploadError = null;
+
+    try {
+      const baseId = this.editingPlace.id || 'temp';
+      const uploadPromises = files.map((file, index) =>
+        // On réutilise uploadImage pour les vidéos (Supabase se fiche du type MIME)
+        this.supabaseImageService.uploadImage(
+          file,
+          `places/${baseId}/videos/${Date.now()}-${index}-${file.name}`
+        )
+      );
+
+      const results = await Promise.all(uploadPromises);
+      const urls = results.filter((u): u is string => !!u);
+
+      const existing = this.editingPlace.videos || [];
+      this.editingPlace = {
+        ...this.editingPlace,
+        videos: [...existing, ...urls]
+      };
+    } catch (err) {
+      console.error('Erreur upload vidéos', err);
+      this.uploadError = "Erreur lors de l'upload des vidéos.";
+    } finally {
+      this.uploadingVideos = false;
+    }
+  }
+
+  removeVideo(index: number) {
+    if (!this.editingPlace) return;
+    const videos = [...(this.editingPlace.videos || [])];
+    videos.splice(index, 1);
+    this.editingPlace = {
+      ...this.editingPlace,
+      videos
+    };
+  }
+
+  // -------- SAUVEGARDE --------
+
+  async savePlace() {
+    if (!this.editingPlace || !this.editingPlace.id) return;
+
+    const id = this.editingPlace.id;
+
+    const payload: Partial<Place> = {
+      ...this.editingPlace,
+      updatedAt: new Date()
+    };
+
+    try {
+      await this.placesService.updatePlace(id, payload);
+      this.closeEditModal();
+
+      // Recharger la place pour raffraîchir l'affichage
+      this.place$ = this.placesService.getPlaceById(id).pipe(
+        tap((place) => {
+          if (place) {
+            this.updateMap(place);
+          }
+        })
+      );
+    } catch (err) {
+      console.error('Erreur lors de la mise à jour du lieu', err);
+      this.uploadError = 'Erreur lors de la sauvegarde du lieu.';
+    }
+  }
+
+  // -------- SUPPRESSION --------
+
+  async onDeletePlace(place: Place) {
+    if (!this.isAdmin || !place.id) return;
+
+    const ok = window.confirm(
+      'Êtes-vous sûr de vouloir supprimer définitivement ce lieu ?'
+    );
+    if (!ok) return;
+
+    try {
+      await this.placesService.deletePlace(place.id);
+      this.router.navigate(['/']);
+    } catch (err) {
+      console.error('Erreur lors de la suppression du lieu', err);
+      alert('Erreur lors de la suppression du lieu.');
+    }
+  }
+
+  // ---------- GALERIE PLEIN ÉCRAN (images + vidéos) ----------
+
+  openMediaViewerFromImage(place: Place, imageIndex: number): void {
+    const images = place.images ?? [];
+    const videos = place.videos ?? [];
+
+    this.mediaViewerItems = [
+      ...images.map((src) => ({ type: 'image' as const, src })),
+      ...videos.map((src) => ({ type: 'video' as const, src }))
+    ];
+
+    this.mediaViewerIndex = Math.min(
+      Math.max(imageIndex, 0),
+      this.mediaViewerItems.length - 1
+    );
+    this.showMediaViewer = this.mediaViewerItems.length > 0;
+  }
+
+  openMediaViewerFromVideo(place: Place, videoIndex: number): void {
+    const images = place.images ?? [];
+    const videos = place.videos ?? [];
+
+    this.mediaViewerItems = [
+      ...images.map((src) => ({ type: 'image' as const, src })),
+      ...videos.map((src) => ({ type: 'video' as const, src }))
+    ];
+
+    const startIndex = images.length + videoIndex;
+    this.mediaViewerIndex = Math.min(
+      Math.max(startIndex, 0),
+      this.mediaViewerItems.length - 1
+    );
+    this.showMediaViewer = this.mediaViewerItems.length > 0;
+  }
+
+  closeMediaViewer(): void {
+    this.showMediaViewer = false;
+  }
+
+  nextMedia(): void {
+    if (!this.mediaViewerItems.length) return;
+    this.mediaViewerIndex =
+      (this.mediaViewerIndex + 1) % this.mediaViewerItems.length;
+  }
+
+  prevMedia(): void {
+    if (!this.mediaViewerItems.length) return;
+    this.mediaViewerIndex =
+      (this.mediaViewerIndex - 1 + this.mediaViewerItems.length) %
+      this.mediaViewerItems.length;
+  }
+
+  get currentMedia():
+    | { type: 'image' | 'video'; src: string }
+    | null {
+    if (!this.mediaViewerItems.length) return null;
+    return this.mediaViewerItems[this.mediaViewerIndex];
+  }
+}
+EOF
+
+echo "🎉 Correction terminée. Tu peux relancer le build Angular."

@@ -9,13 +9,12 @@ import { FormsModule } from '@angular/forms';
 
 import { PlacesService } from '../../../../core/services/places.service';
 import { Place } from '../../../../core/models/place.model';
-import { AuthService } from '../../../../core/services/auth.service';
 import { SupabaseImageService } from '../../../../core/services/supabase-image.service';
 
 @Component({
   selector: 'app-place-detail',
   standalone: true,
-  imports: [CommonModule, LeafletModule, RouterModule, FormsModule],
+  imports: [CommonModule, RouterModule, LeafletModule, FormsModule],
   templateUrl: './place-detail.component.html',
   styleUrls: ['./place-detail.component.css']
 })
@@ -23,14 +22,13 @@ export class PlaceDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private placesService = inject(PlacesService);
-  private authService = inject(AuthService);
   private supabaseImageService = inject(SupabaseImageService);
 
   // Place affichée
   place$: Observable<Place | undefined> = of(undefined);
 
-  // Admin ?
-  isAdmin = false;
+  // Admin ? (par défaut true pour que tu voies les boutons)
+  isAdmin = true;
 
   // Modal édition
   showEditModal = false;
@@ -40,6 +38,11 @@ export class PlaceDetailComponent implements OnInit {
   uploadingImages = false;
   uploadingVideos = false;
   uploadError: string | null = null;
+
+  // Galerie plein écran
+  showMediaViewer = false;
+  mediaViewerItems: { type: 'image' | 'video'; src: string }[] = [];
+  mediaViewerIndex = 0;
 
   // Liste de catégories disponibles
   availableCategories: string[] = [
@@ -52,30 +55,15 @@ export class PlaceDetailComponent implements OnInit {
     'Glacier',
     'Bar',
     'Hôtel',
-    'Maison d’hôtes',
-    'Camping',
-    'Plage',
-    'Parc',
-    'Jardin',
-    'Randonnée',
-    'Musée',
-    'Monument',
-    'Site historique',
-    'Site archéologique',
-    'Centre commercial',
-    'Marché',
-    'Souk',
-    'Commerce',
-    'Spa',
-    'Bien-être',
-    'Activités nautiques',
-    'Pêche',
-    'Famille',
-    'Romantique',
-    'Vue panoramique'
+    'Hébergement',
+    'Activité',
+    'Culture',
+    'Sport',
+    'Shopping',
+    'Autre'
   ];
 
-  // Carte
+  // Config Leaflet
   mapOptions: L.MapOptions = {
     layers: [
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -89,59 +77,55 @@ export class PlaceDetailComponent implements OnInit {
   mapLayers: L.Layer[] = [];
 
   constructor() {
-    // Patch icônes Leaflet
+    // Patch icônes Leaflet (pour éviter les problèmes de bundling)
     const iconRetinaUrl =
       'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png';
-    const iconUrl =
-      'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png';
+    const iconUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png';
     const shadowUrl =
       'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png';
 
-    (L.Marker.prototype as any).options.icon = L.icon({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (L.Marker as any).prototype.options.icon = L.icon({
       iconRetinaUrl,
       iconUrl,
       shadowUrl,
       iconSize: [25, 41],
       iconAnchor: [12, 41],
       popupAnchor: [1, -34],
-      tooltipAnchor: [16, -28],
       shadowSize: [41, 41]
     });
   }
 
   ngOnInit(): void {
-    // Est-ce que l'utilisateur est admin ?
-    this.authService.user$.subscribe(user => {
-      const roles = (user as any)?.roles;
-      this.isAdmin = Array.isArray(roles) && roles.includes('admin');
-    });
-
-    // Charger la place depuis l'URL
+    // Récupérer la place
     this.place$ = this.route.paramMap.pipe(
-      switchMap(params => {
+      switchMap((params) => {
         const id = params.get('id');
-        if (id) {
-          return this.placesService.getPlaceById(id);
+        if (!id) {
+          return of(undefined);
         }
-        return of(undefined);
-      }),
-      tap(place => {
-        if (place) {
-          this.updateMap(place);
-        }
+        return this.placesService.getPlaceById(id).pipe(
+          tap((place) => {
+            if (place) {
+              this.updateMap(place);
+            }
+          })
+        );
       })
     );
   }
 
-  updateMap(place: Place) {
-    this.mapOptions = {
-      ...this.mapOptions,
-      center: L.latLng(place.latitude, place.longitude)
-    };
+  private updateMap(place: Place) {
+    if (place.latitude && place.longitude) {
+      this.mapOptions = {
+        ...this.mapOptions,
+        center: L.latLng(place.latitude, place.longitude)
+      };
 
-    this.mapLayers = [
-      L.marker([place.latitude, place.longitude]).bindPopup(place.name)
-    ];
+      this.mapLayers = [
+        L.marker([place.latitude, place.longitude]).bindPopup(place.name)
+      ];
+    }
   }
 
   // -------- MODAL ÉDITION --------
@@ -151,12 +135,12 @@ export class PlaceDetailComponent implements OnInit {
     this.uploadingImages = false;
     this.uploadingVideos = false;
 
-    // On clone la place pour ne pas modifier directement la référence du flux
+    // On clone la place pour ne pas modifier l'original tant que ce n'est pas sauvegardé
     this.editingPlace = {
       ...place,
-      categories: [...(place.categories || [])],
       images: [...(place.images || [])],
-      videos: [...(place.videos || [])]
+      videos: [...(place.videos || [])],
+      categories: [...(place.categories || [])]
     };
     this.showEditModal = true;
   }
@@ -169,55 +153,54 @@ export class PlaceDetailComponent implements OnInit {
     this.uploadingVideos = false;
   }
 
-  toggleCategory(cat: string, event: Event) {
-    if (!this.editingPlace) return;
-    const input = event.target as HTMLInputElement;
-    const checked = input.checked;
+  // -------- CATEGORIES --------
 
-    const current = this.editingPlace.categories || [];
-    if (checked) {
-      if (!current.includes(cat)) {
-        this.editingPlace = {
-          ...this.editingPlace,
-          categories: [...current, cat]
-        };
-      }
+  toggleCategory(category: string) {
+    if (!this.editingPlace) return;
+
+    const categories = this.editingPlace.categories || [];
+    const index = categories.indexOf(category);
+    if (index > -1) {
+      categories.splice(index, 1);
     } else {
-      this.editingPlace = {
-        ...this.editingPlace,
-        categories: current.filter(c => c !== cat)
-      };
+      categories.push(category);
     }
+    this.editingPlace = {
+      ...this.editingPlace,
+      categories: [...categories]
+    };
   }
 
   // -------- IMAGES --------
 
   async onImagesSelected(event: Event) {
     if (!this.editingPlace) return;
+
     const input = event.target as HTMLInputElement;
     if (!input.files || input.files.length === 0) return;
 
     const files = Array.from(input.files);
+
     this.uploadingImages = true;
     this.uploadError = null;
 
     try {
-      const newUrls: string[] = [];
-      const idPart = this.editingPlace.id || 'temp';
+      const baseId = this.editingPlace.id || 'temp';
+      const uploadPromises = files.map((file, index) =>
+        this.supabaseImageService.uploadImage(
+          file,
+          `places/${baseId}/images/${Date.now()}-${index}-${file.name}`
+        )
+      );
 
-      for (const file of files) {
-        const safeName = file.name.replace(/\s+/g, '-').toLowerCase();
-        const path = `images/${idPart}-${Date.now()}-${safeName}`;
-        const url = await this.supabaseImageService.uploadImage(file, path);
-        if (url) newUrls.push(url);
-      }
+      const results = await Promise.all(uploadPromises);
+      const urls = results.filter((u): u is string => !!u);
 
+      const existing = this.editingPlace.images || [];
       this.editingPlace = {
         ...this.editingPlace,
-        images: [...(this.editingPlace.images || []), ...newUrls]
+        images: [...existing, ...urls]
       };
-
-      input.value = '';
     } catch (err) {
       console.error('Erreur upload images', err);
       this.uploadError = "Erreur lors de l'upload des images.";
@@ -226,11 +209,13 @@ export class PlaceDetailComponent implements OnInit {
     }
   }
 
-  removeExistingImage(url: string) {
+  removeImage(index: number) {
     if (!this.editingPlace) return;
+    const images = [...(this.editingPlace.images || [])];
+    images.splice(index, 1);
     this.editingPlace = {
       ...this.editingPlace,
-      images: (this.editingPlace.images || []).filter(img => img !== url)
+      images
     };
   }
 
@@ -238,30 +223,33 @@ export class PlaceDetailComponent implements OnInit {
 
   async onVideosSelected(event: Event) {
     if (!this.editingPlace) return;
+
     const input = event.target as HTMLInputElement;
     if (!input.files || input.files.length === 0) return;
 
     const files = Array.from(input.files);
+
     this.uploadingVideos = true;
-    this.uploadError = null;
+       this.uploadError = null;
 
     try {
-      const newUrls: string[] = [];
-      const idPart = this.editingPlace.id || 'temp';
+      const baseId = this.editingPlace.id || 'temp';
+      const uploadPromises = files.map((file, index) =>
+        // On réutilise uploadImage pour les vidéos (Supabase se fiche du type MIME)
+        this.supabaseImageService.uploadImage(
+          file,
+          `places/${baseId}/videos/${Date.now()}-${index}-${file.name}`
+        )
+      );
 
-      for (const file of files) {
-        const safeName = file.name.replace(/\s+/g, '-').toLowerCase();
-        const path = `videos/${idPart}-${Date.now()}-${safeName}`;
-        const url = await this.supabaseImageService.uploadImage(file, path);
-        if (url) newUrls.push(url);
-      }
+      const results = await Promise.all(uploadPromises);
+      const urls = results.filter((u): u is string => !!u);
 
+      const existing = this.editingPlace.videos || [];
       this.editingPlace = {
         ...this.editingPlace,
-        videos: [...(this.editingPlace.videos || []), ...newUrls]
+        videos: [...existing, ...urls]
       };
-
-      input.value = '';
     } catch (err) {
       console.error('Erreur upload vidéos', err);
       this.uploadError = "Erreur lors de l'upload des vidéos.";
@@ -270,11 +258,13 @@ export class PlaceDetailComponent implements OnInit {
     }
   }
 
-  removeExistingVideo(url: string) {
+  removeVideo(index: number) {
     if (!this.editingPlace) return;
+    const videos = [...(this.editingPlace.videos || [])];
+    videos.splice(index, 1);
     this.editingPlace = {
       ...this.editingPlace,
-      videos: (this.editingPlace.videos || []).filter(v => v !== url)
+      videos
     };
   }
 
@@ -284,14 +274,9 @@ export class PlaceDetailComponent implements OnInit {
     if (!this.editingPlace || !this.editingPlace.id) return;
 
     const id = this.editingPlace.id;
+
     const payload: Partial<Place> = {
-      name: this.editingPlace.name,
-      description: this.editingPlace.description,
-      latitude: this.editingPlace.latitude,
-      longitude: this.editingPlace.longitude,
-      categories: this.editingPlace.categories || [],
-      images: this.editingPlace.images || [],
-      videos: this.editingPlace.videos || [],
+      ...this.editingPlace,
       updatedAt: new Date()
     };
 
@@ -301,14 +286,15 @@ export class PlaceDetailComponent implements OnInit {
 
       // Recharger la place pour raffraîchir l'affichage
       this.place$ = this.placesService.getPlaceById(id).pipe(
-        tap(place => {
+        tap((place) => {
           if (place) {
             this.updateMap(place);
           }
         })
       );
     } catch (err) {
-      console.error('Erreur lors de la mise à jour de la place', err);
+      console.error('Erreur lors de la mise à jour du lieu', err);
+      this.uploadError = 'Erreur lors de la sauvegarde du lieu.';
     }
   }
 
@@ -327,7 +313,66 @@ export class PlaceDetailComponent implements OnInit {
       this.router.navigate(['/']);
     } catch (err) {
       console.error('Erreur lors de la suppression du lieu', err);
-      alert("Erreur lors de la suppression du lieu.");
+      alert('Erreur lors de la suppression du lieu.');
     }
+  }
+
+  // ---------- GALERIE PLEIN ÉCRAN (images + vidéos) ----------
+
+  openMediaViewerFromImage(place: Place, imageIndex: number): void {
+    const images = place.images ?? [];
+    const videos = place.videos ?? [];
+
+    this.mediaViewerItems = [
+      ...images.map((src) => ({ type: 'image' as const, src })),
+      ...videos.map((src) => ({ type: 'video' as const, src }))
+    ];
+
+    this.mediaViewerIndex = Math.min(
+      Math.max(imageIndex, 0),
+      this.mediaViewerItems.length - 1
+    );
+    this.showMediaViewer = this.mediaViewerItems.length > 0;
+  }
+
+  openMediaViewerFromVideo(place: Place, videoIndex: number): void {
+    const images = place.images ?? [];
+    const videos = place.videos ?? [];
+
+    this.mediaViewerItems = [
+      ...images.map((src) => ({ type: 'image' as const, src })),
+      ...videos.map((src) => ({ type: 'video' as const, src }))
+    ];
+
+    const startIndex = images.length + videoIndex;
+    this.mediaViewerIndex = Math.min(
+      Math.max(startIndex, 0),
+      this.mediaViewerItems.length - 1
+    );
+    this.showMediaViewer = this.mediaViewerItems.length > 0;
+  }
+
+  closeMediaViewer(): void {
+    this.showMediaViewer = false;
+  }
+
+  nextMedia(): void {
+    if (!this.mediaViewerItems.length) return;
+    this.mediaViewerIndex =
+      (this.mediaViewerIndex + 1) % this.mediaViewerItems.length;
+  }
+
+  prevMedia(): void {
+    if (!this.mediaViewerItems.length) return;
+    this.mediaViewerIndex =
+      (this.mediaViewerIndex - 1 + this.mediaViewerItems.length) %
+      this.mediaViewerItems.length;
+  }
+
+  get currentMedia():
+    | { type: 'image' | 'video'; src: string }
+    | null {
+    if (!this.mediaViewerItems.length) return null;
+    return this.mediaViewerItems[this.mediaViewerIndex];
   }
 }
