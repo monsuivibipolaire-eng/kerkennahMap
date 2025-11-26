@@ -85,50 +85,113 @@
         </div>
       </div>
 
-      <!-- CARTE (LOCALISATION) -->
-      <div class="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
-        <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+      <!-- À propos -->
+      <div class="bg-white rounded-2xl shadow-sm p-6">
+        <h2 class="text-xl font-semibold text-gray-800 mb-2 border-b pb-2">
+          À propos
+        </h2>
+        <p class="text-gray-700 leading-relaxed">
+          {{ place.description || 'Aucune description pour l’instant.' }}
+        </p>
+      </div>
+
+      <!-- ✅ Avis & commentaires (utilisateurs connectés) -->
+      <div class="bg-white rounded-2xl shadow-sm p-6">
+        <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">
+          Avis et commentaires
+        </h2>
+
+        <!-- Résumé des avis -->
+        <div *ngIf="averageRating !== null; else noRatingYet" class="mb-4 flex items-center gap-2 text-sm">
+          <span class="text-yellow-500">★</span>
+          <span class="font-semibold">{{ averageRating }}</span>
+          <span class="text-gray-500 text-xs">
+            ({{ comments.length }} avis)
+          </span>
+        </div>
+        <ng-template #noRatingYet>
+          <p class="mb-4 text-xs text-gray-500">
+            Aucun avis pour le moment. Soyez le premier à commenter !
+          </p>
+        </ng-template>
+
+        <!-- Formulaire d'avis -->
+        <div *ngIf="isLoggedIn; else mustLogin" class="mb-5 space-y-3">
           <div>
-            <h2 class="text-lg font-semibold text-gray-800">Localisation</h2>
-            <p class="text-xs text-gray-500">
-              Cliquez sur la carte pour voir exactement où se situe le lieu.
+            <label class="block text-xs font-medium text-gray-700 mb-1">Votre note</label>
+            <select
+              [(ngModel)]="newCommentRating"
+              name="rating"
+              class="rounded-lg border-gray-300 text-sm shadow-sm focus:ring-yellow-400 focus:border-yellow-400"
+            >
+              <option *ngFor="let r of [5,4,3,2,1]" [value]="r">
+                {{ r }} / 5
+              </option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Votre commentaire</label>
+            <textarea
+              [(ngModel)]="newCommentText"
+              name="comment"
+              rows="3"
+              class="block w-full rounded-lg border-gray-300 text-sm shadow-sm focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Partagez votre expérience sur ce lieu..."
+            ></textarea>
+          </div>
+
+          <button
+            type="button"
+            (click)="submitComment()"
+            [disabled]="!newCommentText.trim().length || isSubmittingComment"
+            class="inline-flex items-center px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold shadow hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Envoyer mon avis
+          </button>
+        </div>
+
+        <ng-template #mustLogin>
+          <p class="text-xs text-gray-500 mb-4">
+            Vous devez être connecté pour laisser un commentaire et une évaluation.
+          </p>
+        </ng-template>
+
+        <!-- Liste des commentaires -->
+        <div class="space-y-3">
+          <div
+            *ngFor="let c of comments"
+            class="border border-gray-100 rounded-xl p-3 bg-gray-50"
+          >
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-semibold text-gray-800">
+                {{ c.userName }}
+              </span>
+              <span class="text-xs text-yellow-500">
+                ★ {{ c.rating }}/5
+              </span>
+            </div>
+            <p class="text-xs text-gray-700 mb-1">
+              {{ c.comment }}
+            </p>
+            <p class="text-[10px] text-gray-400">
+              {{ c.createdAt | date:'short' }}
             </p>
           </div>
         </div>
-        <div class="h-72 md:h-96">
-          <div
-            leaflet
-            [leafletOptions]="mapOptions"
-            [leafletLayers]="mapLayers"
-            class="w-full h-full"
-          ></div>
-        </div>
       </div>
 
-      <!-- Infos & vidéos -->
-      <div class="space-y-6">
-        <!-- Infos générales -->
-        <div class="bg-white rounded-2xl shadow-sm p-6">
-          <h2 class="text-xl font-semibold text-gray-800 mb-2 border-b pb-2">
-            À propos
-          </h2>
-          <p class="text-gray-700 leading-relaxed">
-            {{ place.description || 'Aucune description pour l’instant.' }}
-          </p>
-        </div>
-
-        <!-- Vidéos -->
-        <div *ngIf="place.videos && place.videos.length > 0" class="bg-white rounded-2xl shadow-sm p-6">
-          <h3 class="text-lg font-semibold text-gray-800 mb-3">Vidéos</h3>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <video
-              *ngFor="let vid of place.videos; let i = index"
-              [src]="vid"
-              controls
-              (click)="openMediaViewerFromVideo(place, i)"
-              class="w-full h-48 md:h-56 rounded-xl border border-gray-200 bg-black cursor-pointer"
-            ></video>
-          </div>
+      <!-- Vidéos -->
+      <div *ngIf="place.videos && place.videos.length > 0" class="bg-white rounded-2xl shadow-sm p-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-3">Vidéos</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <video
+            *ngFor="let vid of place.videos; let i = index"
+            [src]="vid"
+            controls
+            (click)="openMediaViewerFromVideo(place, i)"
+            class="w-full h-48 md:h-56 rounded-xl border border-gray-200 bg-black cursor-pointer"
+          ></video>
         </div>
       </div>
 
@@ -182,55 +245,30 @@
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Colonne latérale -->
-    <div class="space-y-6">
-      <!-- Résumé -->
-      <div class="bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
-        <h2 class="text-lg font-semibold text-gray-800 mb-4">Résumé</h2>
-
-        <div class="space-y-3 text-sm">
-          <div class="flex items-center justify-between">
-            <span class="text-gray-600">Catégories</span>
-            <span class="font-medium text-gray-900">
-              {{ place.categories.length || 0 }}
-            </span>
-          </div>
-
-          <div class="flex items-center justify-between">
-            <span class="text-gray-600">Photos</span>
-            <span class="font-medium text-gray-900">
-              {{ place.images.length || 0 }}
-            </span>
-          </div>
-
-          <div class="flex items-center justify-between">
-            <span class="text-gray-600">Vidéos</span>
-            <span class="font-medium text-gray-900">
-              {{ place.videos?.length || 0 }}
-            </span>
-          </div>
-
-          <div class="pt-3 border-t border-gray-100">
-            <span
-              class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold"
-              [ngClass]="{
-                'bg-yellow-100 text-yellow-800': place.status === 'pending',
-                'bg-green-100 text-green-800': place.status === 'approved',
-                'bg-red-100 text-red-800': place.status === 'rejected'
-              }"
-            >
-              <ng-container [ngSwitch]="place.status">
-                <span *ngSwitchCase="'pending'">⏳ En attente de validation</span>
-                <span *ngSwitchCase="'approved'">✅ Lieu validé</span>
-                <span *ngSwitchCase="'rejected'">❌ Lieu rejeté</span>
-              </ng-container>
-            </span>
+      <!-- ✅ Carte tout en bas -->
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
+        <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-semibold text-gray-800">Localisation</h2>
+            <p class="text-xs text-gray-500">
+              Cliquez sur la carte pour voir exactement où se situe le lieu.
+            </p>
           </div>
         </div>
+        <div class="h-72 md:h-96">
+          <div
+            leaflet
+            [leafletOptions]="mapOptions"
+            [leafletLayers]="mapLayers"
+            class="w-full h-full"
+          ></div>
+        </div>
       </div>
+    </div>
 
+    <!-- Colonne latérale (Résumé supprimé, on garde juste l'aide) -->
+    <div class="space-y-6">
       <!-- Bloc aide -->
       <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl p-5 border border-blue-100">
         <h3 class="text-base font-semibold text-blue-900 mb-2">
@@ -464,7 +502,7 @@
   <!-- Galerie plein écran (images + vidéos) -->
   <div
     *ngIf="showMediaViewer"
-    class="fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center" style="z-index: 999999;"
+    class="fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center"
   >
     <!-- Bouton fermer -->
     <button

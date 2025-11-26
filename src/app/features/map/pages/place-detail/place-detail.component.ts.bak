@@ -4,7 +4,7 @@ import { ActivatedRoute, RouterModule, Router } from '@angular/router';
 import { LeafletModule } from '@bluehalo/ngx-leaflet';
 import * as L from 'leaflet';
 import { Observable, of } from 'rxjs';
-import { switchMap, tap } from 'rxjs/operators';
+import { switchMap, tap, map } from 'rxjs/operators';
 import { FormsModule } from '@angular/forms';
 
 import { PlacesService } from '../../../../core/services/places.service';
@@ -140,22 +140,54 @@ export class PlaceDetailComponent implements OnInit {
       this.isLoggedIn = anyAuth.isLoggedIn;
     }
 
-    // Récupérer la place
+    // Récupérer la place & normaliser les dates
     this.place$ = this.route.paramMap.pipe(
       switchMap((params) => {
         const id = params.get('id');
         if (!id) {
           return of(undefined);
         }
-        return this.placesService.getPlaceById(id).pipe(
-          tap((place) => {
-            if (place) {
-              this.updateMap(place);
-            }
-          })
-        );
+        return this.placesService.getPlaceById(id);
+      }),
+      map((place: Place | undefined) =>
+        place ? this.normalizePlaceDates(place) : undefined
+      ),
+      tap((place) => {
+        if (place) {
+          this.updateMap(place);
+        }
       })
     );
+  }
+
+  /**
+   * Convertit les champs de type Timestamp / string / number en Date
+   * pour que le DatePipe Angular les accepte.
+   */
+  private normalizePlaceDates(place: Place): Place {
+    const convert = (v: any): Date | undefined => {
+      if (!v) return undefined;
+      if (v instanceof Date) return v;
+      // Firestore / Supabase Timestamp avec méthode toDate()
+      if (typeof v.toDate === 'function') return v.toDate();
+      // Objet { seconds, nanoseconds }
+      if (typeof v.seconds === 'number') {
+        return new Date(v.seconds * 1000);
+      }
+      // nombre (ms)
+      if (typeof v === 'number') return new Date(v);
+      // string parsable
+      const parsed = new Date(v);
+      if (!isNaN(parsed.getTime())) return parsed;
+      return undefined;
+    };
+
+    return {
+      ...place,
+      createdAt: convert((place as any).createdAt) as any,
+      updatedAt: convert((place as any).updatedAt) as any,
+      validatedAt: convert((place as any).validatedAt) as any
+    };
   }
 
   private updateMap(place: Place) {
@@ -365,6 +397,7 @@ export class PlaceDetailComponent implements OnInit {
 
       // Recharger la place pour raffraîchir l'affichage
       this.place$ = this.placesService.getPlaceById(id).pipe(
+        map((place) => (place ? this.normalizePlaceDates(place) : undefined)),
         tap((place) => {
           if (place) {
             this.updateMap(place);

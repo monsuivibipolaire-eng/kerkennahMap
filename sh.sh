@@ -3,510 +3,595 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 
-TS="$ROOT/src/app/features/map/pages/place-detail/place-detail.component.ts"
+HTML="$ROOT/src/app/features/map/pages/place-detail/place-detail.component.html"
 
-if [[ ! -f "$TS" ]]; then
-  echo "❌ Fichier place-detail.component.ts introuvable à partir de $ROOT"
+if [[ ! -f "$HTML" ]]; then
+  echo "❌ Fichier place-detail.component.html introuvable à partir de $ROOT"
   exit 1
 fi
 
-echo "💾 Backup de l'ancien TS..."
-cp "$TS" "$TS.bak"
-
-echo "✍️ Réécriture complète de place-detail.component.ts avec normalisation des dates..."
-
-cat <<'EOF_TS' > "$TS"
-import { Component, OnInit, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { ActivatedRoute, RouterModule, Router } from '@angular/router';
-import { LeafletModule } from '@bluehalo/ngx-leaflet';
-import * as L from 'leaflet';
-import { Observable, of } from 'rxjs';
-import { switchMap, tap, map } from 'rxjs/operators';
-import { FormsModule } from '@angular/forms';
-
-import { PlacesService } from '../../../../core/services/places.service';
-import { Place } from '../../../../core/models/place.model';
-import { AuthService } from '../../../../core/services/auth.service';
-import { SupabaseImageService } from '../../../../core/services/supabase-image.service';
-
-interface PlaceComment {
-  userName: string;
-  rating: number;
-  comment: string;
-  createdAt: Date;
-}
-
-@Component({
-  selector: 'app-place-detail',
-  standalone: true,
-  imports: [CommonModule, RouterModule, LeafletModule, FormsModule],
-  templateUrl: './place-detail.component.html',
-  styleUrls: ['./place-detail.component.css']
-})
-export class PlaceDetailComponent implements OnInit {
-  private route = inject(ActivatedRoute);
-  private router = inject(Router);
-  private placesService = inject(PlacesService);
-  private authService = inject(AuthService);
-  private supabaseImageService = inject(SupabaseImageService);
-
-  // Place affichée
-  place$: Observable<Place | undefined> = of(undefined);
-
-  // Admin / connexion
-  isAdmin = false;
-  isLoggedIn = false;
-  currentUserName: string | null = null;
-
-  // Modal édition
-  showEditModal = false;
-  editingPlace: Place | null = null;
-
-  // Upload états
-  uploadingImages = false;
-  uploadingVideos = false;
-  uploadError: string | null = null;
-
-  // Galerie plein écran
-  showMediaViewer = false;
-  mediaViewerItems: { type: 'image' | 'video'; src: string }[] = [];
-  mediaViewerIndex = 0;
-
-  // Avis / commentaires
-  comments: PlaceComment[] = [];
-  newCommentRating = 5;
-  newCommentText = '';
-  isSubmittingComment = false;
-
-  // Liste de catégories disponibles
-  availableCategories: string[] = [
-    'Restaurant',
-    'Fruits de mer',
-    'Café',
-    'Fast-food',
-    'Pizzeria',
-    'Boulangerie',
-    'Glacier',
-    'Bar',
-    'Hôtel',
-    'Hébergement',
-    'Activité',
-    'Culture',
-    'Sport',
-    'Shopping',
-    'Autre'
-  ];
-
-  // Config Leaflet
-  mapOptions: L.MapOptions = {
-    layers: [
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 18
-      })
-    ],
-    zoom: 14,
-    center: L.latLng(34.71, 11.15)
-  };
-
-  mapLayers: L.Layer[] = [];
-
-  constructor() {
-    // Patch icônes Leaflet (pour éviter les problèmes de bundling)
-    const iconRetinaUrl =
-      'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png';
-    const iconUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png';
-    const shadowUrl =
-      'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png';
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (L.Marker as any).prototype.options.icon = L.icon({
-      iconRetinaUrl,
-      iconUrl,
-      shadowUrl,
-      iconSize: [25, 41],
-      iconAnchor: [12, 41],
-      popupAnchor: [1, -34],
-      shadowSize: [41, 41]
-    });
-  }
-
-  ngOnInit(): void {
-    // Gestion connexion / admin avec AuthService (façon "safe" via any)
-    const anyAuth = this.authService as any;
-
-    if (anyAuth.user$ && typeof anyAuth.user$.subscribe === 'function') {
-      anyAuth.user$.subscribe((user: any) => {
-        this.isLoggedIn = !!user;
-        if (user) {
-          this.currentUserName =
-            user.fullName || user.name || user.email || 'Utilisateur';
-
-          if (Array.isArray(user.roles)) {
-            this.isAdmin = user.roles.includes('admin');
-          }
-        } else {
-          this.currentUserName = null;
-          this.isAdmin = false;
-        }
-      });
-    } else if (anyAuth.isLoggedIn$ && typeof anyAuth.isLoggedIn$.subscribe === 'function') {
-      anyAuth.isLoggedIn$.subscribe((logged: any) => {
-        this.isLoggedIn = !!logged;
-      });
-    } else if (typeof anyAuth.isLoggedIn === 'boolean') {
-      this.isLoggedIn = anyAuth.isLoggedIn;
-    }
-
-    // Récupérer la place & normaliser les dates
-    this.place$ = this.route.paramMap.pipe(
-      switchMap((params) => {
-        const id = params.get('id');
-        if (!id) {
-          return of(undefined);
-        }
-        return this.placesService.getPlaceById(id);
-      }),
-      map((place: Place | undefined) =>
-        place ? this.normalizePlaceDates(place) : undefined
-      ),
-      tap((place) => {
-        if (place) {
-          this.updateMap(place);
-        }
-      })
-    );
-  }
-
-  /**
-   * Convertit les champs de type Timestamp / string / number en Date
-   * pour que le DatePipe Angular les accepte.
-   */
-  private normalizePlaceDates(place: Place): Place {
-    const convert = (v: any): Date | undefined => {
-      if (!v) return undefined;
-      if (v instanceof Date) return v;
-      // Firestore / Supabase Timestamp avec méthode toDate()
-      if (typeof v.toDate === 'function') return v.toDate();
-      // Objet { seconds, nanoseconds }
-      if (typeof v.seconds === 'number') {
-        return new Date(v.seconds * 1000);
-      }
-      // nombre (ms)
-      if (typeof v === 'number') return new Date(v);
-      // string parsable
-      const parsed = new Date(v);
-      if (!isNaN(parsed.getTime())) return parsed;
-      return undefined;
-    };
-
-    return {
-      ...place,
-      createdAt: convert((place as any).createdAt) as any,
-      updatedAt: convert((place as any).updatedAt) as any,
-      validatedAt: convert((place as any).validatedAt) as any
-    };
-  }
-
-  private updateMap(place: Place) {
-    if (place.latitude && place.longitude) {
-      this.mapOptions = {
-        ...this.mapOptions,
-        center: L.latLng(place.latitude, place.longitude)
-      };
-
-      this.mapLayers = [
-        L.marker([place.latitude, place.longitude]).bindPopup(place.name)
-      ];
-    }
-  }
-
-  // -------- AVIS / COMMENTAIRES --------
-
-  get averageRating(): number | null {
-    if (!this.comments.length) {
-      return null;
-    }
-    const sum = this.comments.reduce((acc, c) => acc + c.rating, 0);
-    return Math.round((sum / this.comments.length) * 10) / 10;
-  }
-
-  submitComment(): void {
-    if (!this.isLoggedIn) {
-      return;
-    }
-    const text = this.newCommentText.trim();
-    if (!text) {
-      return;
-    }
-
-    this.isSubmittingComment = true;
-
-    const newComment: PlaceComment = {
-      userName: this.currentUserName || 'Utilisateur',
-      rating: this.newCommentRating,
-      comment: text,
-      createdAt: new Date()
-    };
-
-    // Pour l’instant, stockage local uniquement (pas de backend)
-    this.comments = [newComment, ...this.comments];
-
-    this.newCommentText = '';
-    this.newCommentRating = 5;
-    this.isSubmittingComment = false;
-  }
-
-  // -------- MODAL ÉDITION --------
-
-  openEditModal(place: Place) {
-    this.uploadError = null;
-    this.uploadingImages = false;
-    this.uploadingVideos = false;
-
-    // On clone la place pour ne pas modifier l'original tant que ce n'est pas sauvegardé
-    this.editingPlace = {
-      ...place,
-      images: [...(place.images || [])],
-      videos: [...(place.videos || [])],
-      categories: [...(place.categories || [])]
-    };
-    this.showEditModal = true;
-  }
-
-  closeEditModal() {
-    this.showEditModal = false;
-    this.editingPlace = null;
-    this.uploadError = null;
-    this.uploadingImages = false;
-    this.uploadingVideos = false;
-  }
-
-  // -------- CATEGORIES --------
-
-  toggleCategory(category: string) {
-    if (!this.editingPlace) return;
-
-    const categories = this.editingPlace.categories || [];
-    const index = categories.indexOf(category);
-    if (index > -1) {
-      categories.splice(index, 1);
-    } else {
-      categories.push(category);
-    }
-    this.editingPlace = {
-      ...this.editingPlace,
-      categories: [...categories]
-    };
-  }
-
-  // -------- IMAGES --------
-
-  async onImagesSelected(event: Event) {
-    if (!this.editingPlace) return;
-
-    const input = event.target as HTMLInputElement;
-    if (!input.files || input.files.length === 0) return;
-
-    const files = Array.from(input.files);
-
-    this.uploadingImages = true;
-    this.uploadError = null;
-
-    try {
-      const baseId = this.editingPlace.id || 'temp';
-      const uploadPromises = files.map((file, index) =>
-        this.supabaseImageService.uploadImage(
-          file,
-          `places/${baseId}/images/${Date.now()}-${index}-${file.name}`
-        )
-      );
-
-      const results = await Promise.all(uploadPromises);
-      const urls = results.filter((u): u is string => !!u);
-
-      const existing = this.editingPlace.images || [];
-      this.editingPlace = {
-        ...this.editingPlace,
-        images: [...existing, ...urls]
-      };
-    } catch (err) {
-      console.error('Erreur upload images', err);
-      this.uploadError = "Erreur lors de l'upload des images.";
-    } finally {
-      this.uploadingImages = false;
-    }
-  }
-
-  removeImage(index: number) {
-    if (!this.editingPlace) return;
-    const images = [...(this.editingPlace.images || [])];
-    images.splice(index, 1);
-    this.editingPlace = {
-      ...this.editingPlace,
-      images
-    };
-  }
-
-  // -------- VIDEOS --------
-
-  async onVideosSelected(event: Event) {
-    if (!this.editingPlace) return;
-
-    const input = event.target as HTMLInputElement;
-    if (!input.files || input.files.length === 0) return;
-
-    const files = Array.from(input.files);
-
-    this.uploadingVideos = true;
-    this.uploadError = null;
-
-    try {
-      const baseId = this.editingPlace.id || 'temp';
-      const uploadPromises = files.map((file, index) =>
-        // On réutilise uploadImage pour les vidéos (Supabase se fiche du type)
-        this.supabaseImageService.uploadImage(
-          file,
-          `places/${baseId}/videos/${Date.now()}-${index}-${file.name}`
-        )
-      );
-
-      const results = await Promise.all(uploadPromises);
-      const urls = results.filter((u): u is string => !!u);
-
-      const existing = this.editingPlace.videos || [];
-      this.editingPlace = {
-        ...this.editingPlace,
-        videos: [...existing, ...urls]
-      };
-    } catch (err) {
-      console.error('Erreur upload vidéos', err);
-      this.uploadError = "Erreur lors de l'upload des vidéos.";
-    } finally {
-      this.uploadingVideos = false;
-    }
-  }
-
-  removeVideo(index: number) {
-    if (!this.editingPlace) return;
-    const videos = [...(this.editingPlace.videos || [])];
-    videos.splice(index, 1);
-    this.editingPlace = {
-      ...this.editingPlace,
-      videos
-    };
-  }
-
-  // -------- SAUVEGARDE --------
-
-  async savePlace() {
-    if (!this.editingPlace || !this.editingPlace.id) return;
-
-    const id = this.editingPlace.id;
-
-    const payload: Partial<Place> = {
-      ...this.editingPlace,
-      updatedAt: new Date()
-    };
-
-    try {
-      await this.placesService.updatePlace(id, payload);
-      this.closeEditModal();
-
-      // Recharger la place pour raffraîchir l'affichage
-      this.place$ = this.placesService.getPlaceById(id).pipe(
-        map((place) => (place ? this.normalizePlaceDates(place) : undefined)),
-        tap((place) => {
-          if (place) {
-            this.updateMap(place);
-          }
-        })
-      );
-    } catch (err) {
-      console.error('Erreur lors de la mise à jour du lieu', err);
-      this.uploadError = 'Erreur lors de la sauvegarde du lieu.';
-    }
-  }
-
-  // -------- SUPPRESSION --------
-
-  async onDeletePlace(place: Place) {
-    if (!this.isAdmin || !place.id) return;
-
-    const ok = window.confirm(
-      'Êtes-vous sûr de vouloir supprimer définitivement ce lieu ?'
-    );
-    if (!ok) return;
-
-    try {
-      await this.placesService.deletePlace(place.id);
-      this.router.navigate(['/']);
-    } catch (err) {
-      console.error('Erreur lors de la suppression du lieu', err);
-      alert('Erreur lors de la suppression du lieu.');
-    }
-  }
-
-  // ---------- GALERIE PLEIN ÉCRAN (images + vidéos) ----------
-
-  openMediaViewerFromImage(place: Place, imageIndex: number): void {
-    const images = place.images ?? [];
-    const videos = place.videos ?? [];
-
-    this.mediaViewerItems = [
-      ...images.map((src) => ({ type: 'image' as const, src })),
-      ...videos.map((src) => ({ type: 'video' as const, src }))
-    ];
-
-    this.mediaViewerIndex = Math.min(
-      Math.max(imageIndex, 0),
-      this.mediaViewerItems.length - 1
-    );
-    this.showMediaViewer = this.mediaViewerItems.length > 0;
-  }
-
-  openMediaViewerFromVideo(place: Place, videoIndex: number): void {
-    const images = place.images ?? [];
-    const videos = place.videos ?? [];
-
-    this.mediaViewerItems = [
-      ...images.map((src) => ({ type: 'image' as const, src })),
-      ...videos.map((src) => ({ type: 'video' as const, src }))
-    ];
-
-    const startIndex = images.length + videoIndex;
-    this.mediaViewerIndex = Math.min(
-      Math.max(startIndex, 0),
-      this.mediaViewerItems.length - 1
-    );
-    this.showMediaViewer = this.mediaViewerItems.length > 0;
-  }
-
-  closeMediaViewer(): void {
-    this.showMediaViewer = false;
-  }
-
-  nextMedia(): void {
-    if (!this.mediaViewerItems.length) return;
-    this.mediaViewerIndex =
-      (this.mediaViewerIndex + 1) % this.mediaViewerItems.length;
-  }
-
-  prevMedia(): void {
-    if (!this.mediaViewerItems.length) return;
-    this.mediaViewerIndex =
-      (this.mediaViewerIndex - 1 + this.mediaViewerItems.length) %
-      this.mediaViewerItems.length;
-  }
-
-  get currentMedia():
-    | { type: 'image' | 'video'; src: string }
-    | null {
-    if (!this.mediaViewerItems.length) return null;
-    return this.mediaViewerItems[this.mediaViewerIndex];
-  }
-}
-EOF_TS
-
-echo "✅ place-detail.component.ts mis à jour."
-echo "📦 Backup : $TS.bak"
+echo "💾 Backup de l'ancien HTML..."
+cp "$HTML" "$HTML.bak"
+
+echo "✍️ Réécriture complète du HTML avec étoiles cliquables pour la note..."
+
+cat <<'EOF_HTML' > "$HTML"
+<div class="min-h-screen bg-gray-50 pb-12" *ngIf="place$ | async as place; else loading">
+
+  <!-- HERO -->
+  <div class="relative h-64 md:h-96 w-full bg-gray-800 overflow-hidden">
+    <img
+      *ngIf="place.images && place.images.length > 0"
+      [src]="place.images[0]"
+      class="w-full h-full object-cover opacity-70"
+      alt="{{ place.name }}"
+    />
+
+    <div
+      *ngIf="!place.images || place.images.length === 0"
+      class="absolute inset-0 bg-gradient-to-r from-blue-900 to-blue-700 opacity-80"
+    ></div>
+
+    <!-- Overlay titre -->
+    <div class="absolute inset-0 flex flex-col justify-end">
+      <div class="bg-gradient-to-t from-black/80 via-black/40 to-transparent p-6 md:p-10">
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <h1 class="text-2xl md:text-4xl font-bold text-white mb-2">
+              {{ place.name }}
+            </h1>
+            <div class="flex flex-wrap items-center gap-2">
+              <span
+                *ngFor="let cat of place.categories"
+                class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-white/15 text-white border border-white/30 backdrop-blur"
+              >
+                {{ cat }}
+              </span>
+              <span
+                class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold"
+                [ngClass]="{
+                  'bg-yellow-400 text-gray-900': place.status === 'pending',
+                  'bg-green-500 text-white': place.status === 'approved',
+                  'bg-red-500 text-white': place.status === 'rejected'
+                }"
+              >
+                <ng-container [ngSwitch]="place.status">
+                  <span *ngSwitchCase="'pending'">⏳ En attente</span>
+                  <span *ngSwitchCase="'approved'">✅ Validé</span>
+                  <span *ngSwitchCase="'rejected'">❌ Rejeté</span>
+                </ng-container>
+              </span>
+            </div>
+          </div>
+
+          <!-- Boutons admin -->
+          <div *ngIf="isAdmin" class="flex flex-col gap-2">
+            <button
+              (click)="openEditModal(place)"
+              class="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-white text-gray-900 text-sm font-semibold shadow hover:bg-gray-100 transition"
+            >
+              ✏️ Modifier le lieu
+            </button>
+            <button
+              (click)="onDeletePlace(place)"
+              class="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-semibold shadow hover:bg-red-700 transition"
+            >
+              🗑️ Supprimer
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTENU PRINCIPAL -->
+  <div class="max-w-6xl mx-auto px-4 mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- Colonne principale -->
+    <div class="space-y-6 lg:col-span-2">
+
+      <!-- ✅ GALERIE PHOTOS EN PREMIER -->
+      <div *ngIf="place.images && place.images.length > 0" class="bg-white rounded-2xl shadow-sm p-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-3">Galerie photos</h3>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <img
+            *ngFor="let img of place.images; let i = index"
+            [src]="img"
+            (click)="openMediaViewerFromImage(place, i)"
+            class="w-full h-32 md:h-40 object-cover rounded-xl border border-gray-200 hover:opacity-90 transition cursor-pointer"
+            alt="Photo de {{ place.name }}"
+          />
+        </div>
+      </div>
+
+      <!-- À propos -->
+      <div class="bg-white rounded-2xl shadow-sm p-6">
+        <h2 class="text-xl font-semibold text-gray-800 mb-2 border-b pb-2">
+          À propos
+        </h2>
+        <p class="text-gray-700 leading-relaxed">
+          {{ place.description || 'Aucune description pour l’instant.' }}
+        </p>
+      </div>
+
+      <!-- ✅ Avis & commentaires (utilisateurs connectés) -->
+      <div class="bg-white rounded-2xl shadow-sm p-6">
+        <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">
+          Avis et commentaires
+        </h2>
+
+        <!-- Résumé des avis -->
+        <div *ngIf="averageRating !== null; else noRatingYet" class="mb-4 flex items-center gap-2 text-sm">
+          <span class="text-yellow-500">★</span>
+          <span class="font-semibold">{{ averageRating }}</span>
+          <span class="text-gray-500 text-xs">
+            ({{ comments.length }} avis)
+          </span>
+        </div>
+        <ng-template #noRatingYet>
+          <p class="mb-4 text-xs text-gray-500">
+            Aucun avis pour le moment. Soyez le premier à commenter !
+          </p>
+        </ng-template>
+
+        <!-- Formulaire d'avis -->
+        <div *ngIf="isLoggedIn; else mustLogin" class="mb-5 space-y-3">
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Votre note</label>
+            <div class="flex items-center gap-1">
+              <button
+                type="button"
+                *ngFor="let r of [1,2,3,4,5]"
+                (click)="newCommentRating = r"
+                class="focus:outline-none"
+              >
+                <span
+                  class="text-xl"
+                  [ngClass]="{
+                    'text-yellow-400': newCommentRating >= r,
+                    'text-gray-300': newCommentRating < r
+                  }"
+                >
+                  ★
+                </span>
+              </button>
+              <span class="ml-2 text-xs text-gray-600">
+                {{ newCommentRating }} / 5
+              </span>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Votre commentaire</label>
+            <textarea
+              [(ngModel)]="newCommentText"
+              name="comment"
+              rows="3"
+              class="block w-full rounded-lg border-gray-300 text-sm shadow-sm focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Partagez votre expérience sur ce lieu..."
+            ></textarea>
+          </div>
+
+          <button
+            type="button"
+            (click)="submitComment()"
+            [disabled]="!newCommentText.trim().length || isSubmittingComment"
+            class="inline-flex items-center px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold shadow hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Envoyer mon avis
+          </button>
+        </div>
+
+        <ng-template #mustLogin>
+          <p class="text-xs text-gray-500 mb-4">
+            Vous devez être connecté pour laisser un commentaire et une évaluation.
+          </p>
+        </ng-template>
+
+        <!-- Liste des commentaires -->
+        <div class="space-y-3">
+          <div
+            *ngFor="let c of comments"
+            class="border border-gray-100 rounded-xl p-3 bg-gray-50"
+          >
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-semibold text-gray-800">
+                {{ c.userName }}
+              </span>
+              <span class="text-xs text-yellow-500">
+                ★ {{ c.rating }}/5
+              </span>
+            </div>
+            <p class="text-xs text-gray-700 mb-1">
+              {{ c.comment }}
+            </p>
+            <p class="text-[10px] text-gray-400">
+              {{ c.createdAt | date:'short' }}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vidéos -->
+      <div *ngIf="place.videos && place.videos.length > 0" class="bg-white rounded-2xl shadow-sm p-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-3">Vidéos</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <video
+            *ngFor="let vid of place.videos; let i = index"
+            [src]="vid"
+            controls
+            (click)="openMediaViewerFromVideo(place, i)"
+            class="w-full h-48 md:h-56 rounded-xl border border-gray-200 bg-black cursor-pointer"
+          ></video>
+        </div>
+      </div>
+
+      <!-- Historique de validation -->
+      <div class="bg-white rounded-2xl shadow-sm p-6">
+        <h2 class="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">
+          Historique & validation
+        </h2>
+
+        <div class="space-y-3 text-sm text-gray-700">
+          <div class="flex items-center justify-between">
+            <span class="font-medium">Créé par :</span>
+            <span class="text-gray-600">
+              {{ place.createdBy || 'Inconnu' }}
+            </span>
+          </div>
+
+          <div class="flex items-center justify-between">
+            <span class="font-medium">Créé le :</span>
+            <span class="text-gray-600">
+              {{ place.createdAt | date:'medium' }}
+            </span>
+          </div>
+
+          <div class="flex items-center justify-between" *ngIf="place.updatedAt">
+            <span class="font-medium">Dernière mise à jour :</span>
+            <span class="text-gray-600">
+              {{ place.updatedAt | date:'medium' }}
+            </span>
+          </div>
+
+          <div *ngIf="place.validatedBy" class="pt-2 border-t border-gray-100">
+            <div class="flex items-center justify-between">
+              <span class="font-medium">Validé par :</span>
+              <span class="text-gray-600">
+                {{ place.validatedBy }}
+              </span>
+            </div>
+            <div class="flex items-center justify-between" *ngIf="place.validatedAt">
+              <span class="font-medium">Validé le :</span>
+              <span class="text-gray-600">
+                {{ place.validatedAt | date:'medium' }}
+              </span>
+            </div>
+          </div>
+
+          <div *ngIf="!place.validatedBy" class="pt-2 border-t border-gray-100">
+            <span class="text-xs text-gray-500">
+              Ce lieu n’a pas encore été validé par un administrateur.
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ✅ Carte tout en bas -->
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
+        <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-semibold text-gray-800">Localisation</h2>
+            <p class="text-xs text-gray-500">
+              Cliquez sur la carte pour voir exactement où se situe le lieu.
+            </p>
+          </div>
+        </div>
+        <div class="h-72 md:h-96">
+          <div
+            leaflet
+            [leafletOptions]="mapOptions"
+            [leafletLayers]="mapLayers"
+            class="w-full h-full"
+          ></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Colonne latérale (Résumé supprimé) -->
+    <div class="space-y-6">
+      <!-- Bloc aide -->
+      <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl p-5 border border-blue-100">
+        <h3 class="text-base font-semibold text-blue-900 mb-2">
+          Comment contribuer ?
+        </h3>
+        <p class="text-xs text-blue-900/80 mb-3">
+          Vous pouvez proposer des modifications ou signaler une erreur sur ce lieu
+          en contactant les administrateurs.
+        </p>
+        <ul class="text-xs text-blue-900/80 list-disc list-inside space-y-1">
+          <li>Signaler une information incorrecte</li>
+          <li>Proposer de nouvelles photos</li>
+          <li>Ajouter plus de détails sur l’accès ou les services</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL ÉDITION ADMIN -->
+  <div
+    *ngIf="showEditModal && editingPlace"
+    class="fixed inset-0 z-40 flex items-center justify-center bg-black bg-opacity-40 backdrop-blur-sm px-2"
+  >
+    <form
+      class="bg-white max-w-3xl w-full max-h-[90vh] overflow-y-auto rounded-2xl shadow-xl p-6 space-y-5"
+      (ngSubmit)="savePlace()"
+      (click)="$event.stopPropagation()"
+    >
+      <div class="flex items-start justify-between gap-4 mb-2">
+        <div>
+          <h2 class="text-xl font-bold text-gray-800">Modifier le lieu</h2>
+          <p class="text-xs text-gray-500">
+            Mettez à jour les informations, les catégories, les images ou les vidéos.
+          </p>
+        </div>
+        <button
+          type="button"
+          (click)="closeEditModal()"
+          class="text-gray-400 hover:text-gray-600 text-xl"
+        >
+          ✕
+        </button>
+      </div>
+
+      <!-- Nom -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Nom du lieu</label>
+        <input
+          type="text"
+          [(ngModel)]="editingPlace.name"
+          name="name"
+          class="block w-full rounded-lg border-gray-300 text-sm shadow-sm focus:ring-blue-500 focus:border-blue-500"
+          required
+        />
+      </div>
+
+      <!-- Description -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+        <textarea
+          [(ngModel)]="editingPlace.description"
+          name="description"
+          rows="3"
+          class="block w-full rounded-lg border-gray-300 text-sm shadow-sm focus:ring-blue-500 focus:border-blue-500"
+        ></textarea>
+      </div>
+
+      <!-- Coordonnées -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Latitude</label>
+          <input
+            type="number"
+            [(ngModel)]="editingPlace.latitude"
+            name="latitude"
+            step="0.000001"
+            class="block w-full rounded-lg border-gray-300 text-sm shadow-sm focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Longitude</label>
+          <input
+            type="number"
+            [(ngModel)]="editingPlace.longitude"
+            name="longitude"
+            step="0.000001"
+            class="block w-full rounded-lg border-gray-300 text-sm shadow-sm focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
+      </div>
+
+      <!-- Catégories -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">Catégories</label>
+        <div class="flex flex-wrap gap-2">
+          <button
+            type="button"
+            *ngFor="let cat of availableCategories"
+            (click)="toggleCategory(cat)"
+            class="px-3 py-1 rounded-full text-xs font-medium border transition"
+            [ngClass]="{
+              'bg-blue-600 text-white border-blue-600': editingPlace.categories.includes(cat),
+              'bg-white text-gray-700 border-gray-300 hover:bg-gray-50': !editingPlace.categories.includes(cat)
+            }"
+          >
+            {{ cat }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Statut -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">Statut</label>
+        <select
+          [(ngModel)]="editingPlace.status"
+          name="status"
+          class="block w-full rounded-lg border-gray-300 text-sm shadow-sm focus:ring-blue-500 focus:border-blue-500"
+        >
+          <option value="pending">En attente</option>
+          <option value="approved">Validé</option>
+          <option value="rejected">Rejeté</option>
+        </select>
+      </div>
+
+      <!-- Images -->
+      <div class="border-t border-gray-100 pt-4">
+        <h3 class="text-sm font-semibold text-gray-800 mb-2">Images existantes</h3>
+        <div *ngIf="editingPlace.images?.length; else noImages" class="grid grid-cols-3 gap-2 mb-3">
+          <div
+            *ngFor="let img of editingPlace.images; let i = index"
+            class="relative group"
+          >
+            <img
+              [src]="img"
+              class="w-full h-24 object-cover rounded-lg border border-gray-200"
+            />
+            <button
+              type="button"
+              (click)="removeImage(i)"
+              class="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1 text-xs opacity-0 group-hover:opacity-100 transition"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+        <ng-template #noImages>
+          <p class="text-xs text-gray-500">Aucune image pour l’instant.</p>
+        </ng-template>
+
+        <!-- Ajout de nouvelles images -->
+        <div class="mt-3">
+          <label class="block text-sm font-medium text-gray-700 mb-2">Ajouter des images</label>
+          <input
+            type="file"
+            multiple
+            accept="image/*"
+            (change)="onImagesSelected($event)"
+            class="block w-full text-xs text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+          />
+          <div *ngIf="uploadingImages" class="mt-2 text-xs text-blue-600">
+            Upload des images en cours...
+          </div>
+        </div>
+      </div>
+
+      <!-- Vidéos -->
+      <div class="border-t border-gray-100 pt-4">
+        <h3 class="text-sm font-semibold text-gray-800 mb-2">Vidéos existantes</h3>
+        <div *ngIf="editingPlace.videos?.length; else noVideos" class="space-y-2 mb-3">
+          <div
+            *ngFor="let vid of editingPlace.videos; let i = index"
+            class="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2"
+          >
+            <span class="text-xs text-gray-700 truncate max-w-[70%]">
+              {{ vid }}
+            </span>
+            <button
+              type="button"
+              (click)="removeVideo(i)"
+              class="text-xs text-red-600 hover:text-red-700 font-semibold"
+            >
+              Supprimer
+            </button>
+          </div>
+        </div>
+        <ng-template #noVideos>
+          <p class="text-xs text-gray-500">Aucune vidéo pour l’instant.</p>
+        </ng-template>
+      </div>
+
+      <!-- Ajout de nouvelles vidéos -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">Ajouter des vidéos</label>
+        <input
+          type="file"
+          multiple
+          accept="video/*"
+          (change)="onVideosSelected($event)"
+          class="block w-full text-xs text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100"
+        />
+        <div *ngIf="uploadingVideos" class="mt-2 text-xs text-purple-600">
+          Upload des vidéos en cours...
+        </div>
+      </div>
+
+      <!-- Erreur upload -->
+      <div *ngIf="uploadError" class="text-xs text-red-600">
+        {{ uploadError }}
+      </div>
+
+      <!-- Boutons -->
+      <div class="flex justify-end gap-2 pt-4 border-t border-gray-100">
+        <button
+          type="button"
+          (click)="closeEditModal()"
+          class="px-4 py-2 text-sm rounded-lg border border-gray-300 hover:bg-gray-50"
+        >
+          Annuler
+        </button>
+        <button
+          type="button"
+          (click)="savePlace()"
+          class="px-4 py-2 text-sm rounded-lg bg-yellow-400 hover:bg-yellow-500 text-gray-900 font-semibold shadow"
+        >
+          💾 Enregistrer
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Galerie plein écran (images + vidéos) -->
+  <div
+    *ngIf="showMediaViewer"
+    class="fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center"
+  >
+    <!-- Bouton fermer -->
+    <button
+      type="button"
+      (click)="closeMediaViewer()"
+      class="absolute top-4 right-4 md:top-6 md:right-6 text-white text-2xl md:text-3xl font-bold focus:outline-none"
+      aria-label="Fermer la galerie"
+    >
+      ✕
+    </button>
+
+    <!-- Bouton précédent -->
+    <button
+      type="button"
+      (click)="prevMedia()"
+      class="absolute left-3 md:left-6 text-white text-3xl md:text-4xl font-bold px-2 md:px-4 py-1 md:py-2 rounded-full bg-black/40 hover:bg-black/60 focus:outline-none"
+      aria-label="Média précédent"
+    >
+      ‹
+    </button>
+
+    <!-- Contenu média -->
+    <div class="max-w-5xl w-full px-4">
+      <img
+        *ngIf="currentMedia?.type === 'image'"
+        [src]="currentMedia?.src"
+        class="w-full max-h-[80vh] object-contain mx-auto rounded-xl shadow-lg"
+        alt="Média du lieu"
+      />
+      <video
+        *ngIf="currentMedia?.type === 'video'"
+        [src]="currentMedia?.src"
+        controls
+        autoplay
+        class="w-full max-h-[80vh] mx-auto rounded-xl shadow-lg bg-black"
+      ></video>
+    </div>
+
+    <!-- Bouton suivant -->
+    <button
+      type="button"
+      (click)="nextMedia()"
+      class="absolute right-3 md:right-6 text-white text-3xl md:text-4xl font-bold px-2 md:px-4 py-1 md:py-2 rounded-full bg-black/40 hover:bg-black/60 focus:outline-none"
+      aria-label="Média suivant"
+    >
+      ›
+    </button>
+  </div>
+</div>
+
+<ng-template #loading>
+  <div class="min-h-screen flex items-center justify-center bg-gray-50">
+    <div class="text-center">
+      <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto mb-3"></div>
+      <p class="text-gray-600 text-sm">Chargement du lieu...</p>
+    </div>
+  </div>
+</ng-template>
+EOF_HTML
+
+echo "✅ Nouveau HTML écrit avec étoiles cliquables."
+echo "📦 Backup : $HTML.bak"
