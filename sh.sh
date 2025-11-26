@@ -1,140 +1,112 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# 1) Ne plus jamais afficher l'email comme nom
-PD="src/app/features/map/pages/place-detail/place-detail.component.ts"
+FILE="src/app/features/map/components/place-comments.component.html"
 
-if [ -f "$PD" ]; then
-  echo "➡️ Patch du nom utilisateur (suppression de l'email)..."
-  sed -i.bak "s/user.fullName || user.name || user.email || 'Utilisateur'/user.fullName || user.name || 'Utilisateur'/g" "$PD" || true
-else
-  echo "⚠️ $PD introuvable, je passe cette étape."
+if [ ! -f "$FILE" ]; then
+  echo "❌ Fichier introuvable : $FILE"
+  exit 1
 fi
 
-# 2) Réécriture complète du composant de commentaires
-PC="src/app/features/map/components/place-comments.component.ts"
+echo "➡️ Réécriture complète de $FILE avec affichage étoiles jaunes/grises..."
 
-echo "➡️ Réécriture de $PC (avec @Input comments + isSubmitting et localStorage)..."
-cat > "$PC" <<'TS'
-import { Component, EventEmitter, Input, Output, OnInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+cat > "$FILE" <<'HTML'
+<div class="bg-white rounded-xl shadow-sm p-4 md:p-6 space-y-4">
+  <h2 class="text-lg font-semibold text-gray-900">Avis et commentaires</h2>
 
-export interface PlaceComment {
-  userName: string;
-  rating: number;
-  comment: string;
-  createdAt: Date;
-}
+  <!-- Formulaire de saisie -->
+  <div *ngIf="isLoggedIn; else mustLogin" class="space-y-3">
+    <div class="flex items-center gap-2 text-sm">
+      <span class="font-medium">Votre note :</span>
 
-@Component({
-  selector: 'app-place-comments',
-  standalone: true,
-  imports: [CommonModule, FormsModule],
-  templateUrl: './place-comments.component.html'
-})
-export class PlaceCommentsComponent implements OnInit {
-  @Input() isLoggedIn = false;
-  @Input() currentUserName: string | null = null;
+      <div class="flex items-center gap-1">
+        <button
+          *ngFor="let r of [1,2,3,4,5]"
+          type="button"
+          class="text-xl focus:outline-none"
+          (click)="newRating = r"
+        >
+          <span
+            [ngClass]="{
+              'text-yellow-400': newRating >= r,
+              'text-gray-300': newRating < r
+            }"
+          >
+            ★
+          </span>
+        </button>
+        <span class="text-xs text-gray-500 ml-2">{{ newRating }}/5</span>
+      </div>
+    </div>
 
-  // pour satisfaire [comments]="comments" dans place-detail.component.html
-  @Input() comments: PlaceComment[] = [];
+    <textarea
+      class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+      rows="3"
+      [(ngModel)]="newText"
+      placeholder="Partage ton expérience..."
+    ></textarea>
 
-  // pour satisfaire [isSubmitting]="isSubmittingComment" + logique dans le template
-  @Input() isSubmitting = false;
+    <button
+      type="button"
+      class="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60"
+      [disabled]="isSubmitting || !newText.trim()"
+      (click)="onSubmit()"
+    >
+      <ng-container *ngIf="!isSubmitting; else submitting">
+        Publier mon avis
+      </ng-container>
+      <ng-template #submitting>Envoi...</ng-template>
+    </button>
+  </div>
 
-  @Output() submitComment = new EventEmitter<{ rating: number; text: string }>();
+  <ng-template #mustLogin>
+    <p class="text-sm text-gray-600">
+      Connecte-toi pour laisser un commentaire.
+    </p>
+  </ng-template>
 
-  newRating = 5;
-  newText = '';
+  <!-- Liste des commentaires -->
+  <div class="border-t border-gray-100 pt-4 space-y-3" *ngIf="comments.length > 0; else noComments">
+    <div
+      *ngFor="let c of comments"
+      class="pb-3 border-b border-gray-100 last:border-none last:pb-0"
+    >
+      <div class="flex items-center justify-between mb-1">
+        <div class="font-semibold text-sm text-gray-900">
+          {{ c.userName || 'Utilisateur' }}
+        </div>
 
-  ngOnInit(): void {
-    this.loadFromStorage();
-  }
+        <!-- Affichage des étoiles : jaunes / grises -->
+        <div class="flex items-center gap-1 text-xs text-gray-600">
+          <ng-container *ngFor="let r of [1,2,3,4,5]">
+            <span
+              [ngClass]="{
+                'text-yellow-400': c.rating >= r,
+                'text-gray-300': c.rating < r
+              }"
+              class="text-base"
+            >
+              ★
+            </span>
+          </ng-container>
+        </div>
+      </div>
 
-  private getStorageKey(): string {
-    try {
-      const path = window.location?.pathname ?? '';
-      const match = path.match(/\/place\/([^/]+)/);
-      const id = match ? match[1] : 'default';
-      return `place-comments-${id}`;
-    } catch {
-      return 'place-comments-default';
-    }
-  }
+      <p class="text-sm text-gray-700 whitespace-pre-line">
+        {{ c.comment }}
+      </p>
+      <div class="mt-1 text-xs text-gray-400">
+        {{ c.createdAt | date: 'short' }}
+      </div>
+    </div>
+  </div>
 
-  private loadFromStorage(): void {
-    const key = this.getStorageKey();
-    try {
-      const raw = localStorage.getItem(key);
-      if (!raw) {
-        this.comments = [];
-        return;
-      }
-      const parsed = JSON.parse(raw) as Array<{
-        userName: string;
-        rating: number;
-        comment: string;
-        createdAt: string;
-      }>;
-      this.comments = parsed.map((c) => ({
-        userName: c.userName,
-        rating: c.rating,
-        comment: c.comment,
-        createdAt: new Date(c.createdAt)
-      }));
-    } catch (e) {
-      console.error('Erreur lors du chargement des commentaires', e);
-      this.comments = [];
-    }
-  }
+  <ng-template #noComments>
+    <p class="text-sm text-gray-500">
+      Aucun avis pour le moment. Sois le premier à partager ton expérience !
+    </p>
+  </ng-template>
+</div>
+HTML
 
-  private saveToStorage(): void {
-    const key = this.getStorageKey();
-    try {
-      const payload = this.comments.map((c) => ({
-        userName: c.userName,
-        rating: c.rating,
-        comment: c.comment,
-        createdAt: c.createdAt.toISOString()
-      }));
-      localStorage.setItem(key, JSON.stringify(payload));
-    } catch (e) {
-      console.error('Erreur lors de la sauvegarde des commentaires', e);
-    }
-  }
-
-  onSubmit(): void {
-    const text = this.newText.trim();
-    if (!this.isLoggedIn || !text) {
-      return;
-    }
-
-    this.isSubmitting = true;
-
-    const comment: PlaceComment = {
-      userName: this.currentUserName || 'Utilisateur',
-      rating: this.newRating,
-      comment: text,
-      createdAt: new Date()
-    };
-
-    // Ajout au tableau + persistance
-    this.comments = [comment, ...this.comments];
-    this.saveToStorage();
-
-    // On notifie le parent (pour garder la compatibilité avec le handler existant)
-    this.submitComment.emit({
-      rating: this.newRating,
-      text
-    });
-
-    this.newText = '';
-    this.newRating = 5;
-    this.isSubmitting = false;
-  }
-}
-TS
-
-echo "✅ Terminé. Fichier sauvegardé : $PC"
-echo "   Si besoin, tu peux restaurer l'ancienne version via git ou backup."
+echo "✅ Template mis à jour avec affichage en étoiles (jaunes / grises)."
