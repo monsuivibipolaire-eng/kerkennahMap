@@ -1,30 +1,45 @@
 <div *ngIf="place as p" class="bg-white rounded-xl shadow-sm p-4 md:p-6 space-y-4">
   <h2 class="text-lg font-semibold text-gray-900">Médias</h2>
 
+  <!-- Grille de vignettes -->
   <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
-    <ng-container *ngFor="let img of p.images">
-      <img
-        [src]="img"
-        class="w-full h-32 object-cover rounded-md border border-gray-100"
-        alt="Image du lieu"
-      />
+    <ng-container *ngFor="let img of images; let i = index">
+      <button
+        type="button"
+        class="relative group w-full h-32 md:h-40 rounded-md overflow-hidden border border-gray-100 focus:outline-none"
+        (click)="openImage(i)"
+      >
+        <img
+          [src]="img"
+          class="w-full h-full object-cover"
+          alt="Image du lieu"
+        />
+        <div class="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-sm font-semibold transition-opacity">
+          Voir
+        </div>
+      </button>
+    </ng-container>
+
+    <ng-container *ngFor="let vid of videos; let i = index">
+      <button
+        type="button"
+        class="relative group w-full h-32 md:h-40 rounded-md overflow-hidden border border-gray-100 focus:outline-none"
+        (click)="openVideo(i)"
+      >
+        <video
+          [src]="vid"
+          class="w-full h-full object-cover"
+          muted
+        ></video>
+        <div class="absolute inset-0 bg-black/40 flex items-center justify-center text-white text-sm font-semibold">
+          ▶ Voir la vidéo
+        </div>
+      </button>
     </ng-container>
   </div>
 
-  <div *ngIf="p.videos?.length" class="space-y-2">
-    <div class="text-sm font-medium text-gray-900">Vidéos</div>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-      <video
-        *ngFor="let vid of p.videos"
-        class="w-full h-40 rounded-md border border-gray-100"
-        controls
-      >
-        <source [src]="vid" type="video/mp4" />
-      </video>
-    </div>
-  </div>
-
-  <div class="border-t border-gray-100 pt-4 space-y-2 text-sm">
+  <!-- Zone d'upload visible uniquement en mode édition -->
+  <div *ngIf="editMode" class="border-t border-gray-100 pt-4 space-y-2 text-sm">
     <div class="flex flex-col md:flex-row gap-2 md:items-center">
       <label class="text-sm font-medium text-gray-700">Ajouter des images :</label>
       <input
@@ -50,5 +65,54 @@
     <div *ngIf="uploadError" class="text-xs text-red-600">
       {{ uploadError }}
     </div>
+  </div>
+</div>
+
+<!-- Lightbox plein écran -->
+<div
+  class="fixed inset-0 z-40 bg-black/80 flex items-center justify-center"
+  *ngIf="isLightboxOpen"
+>
+  <button
+    type="button"
+    class="absolute top-4 right-4 text-white text-2xl px-3 py-1 rounded-full bg-black/50"
+    (click)="closeLightbox()"
+  >
+    ✕
+  </button>
+
+  <button
+    type="button"
+    class="absolute left-4 md:left-10 text-white text-3xl px-3 py-2 rounded-full bg-black/40"
+    (click)="prev()"
+  >
+    ‹
+  </button>
+
+  <button
+    type="button"
+    class="absolute right-4 md:right-10 text-white text-3xl px-3 py-2 rounded-full bg-black/40"
+    (click)="next()"
+  >
+    ›
+  </button>
+
+  <div class="max-w-5xl w-full px-4">
+    <ng-container [ngSwitch]="lightboxType">
+      <img
+        *ngSwitchCase="'image'"
+        [src]="images[lightboxIndex]"
+        class="w-full max-h-[80vh] object-contain rounded-lg shadow-lg"
+        alt="Media du lieu"
+      />
+
+      <video
+        *ngSwitchCase="'video'"
+        [src]="videos[lightboxIndex]"
+        class="w-full max-h-[80vh] rounded-lg shadow-lg"
+        controls
+        autoplay
+      ></video>
+    </ng-container>
   </div>
 </div>

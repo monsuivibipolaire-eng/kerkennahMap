@@ -1,6 +1,16 @@
 <ng-container *ngIf="place$ | async as place; else loading">
   <div class="min-h-screen bg-gray-50 pb-12">
 
+    <!-- BARRE ACTIONS ADMIN EN HAUT -->
+    <div class="max-w-6xl mx-auto px-4 pt-6 flex justify-end" *ngIf="isAdmin">
+      <app-place-admin-actions
+        [place]="place"
+        [isAdmin]="isAdmin"
+        (edit)="openEditModal($event)"
+        (delete)="onDeletePlace($event)">
+      </app-place-admin-actions>
+    </div>
+
     <!-- HEADER / HERO -->
     <app-place-header
       [place]="place"
@@ -17,6 +27,7 @@
           [uploadingImages]="uploadingImages"
           [uploadingVideos]="uploadingVideos"
           [uploadError]="uploadError"
+          [editMode]="showEditModal"
           (addImages)="onUploadImages($event)"
           (addVideos)="onUploadVideos($event)">
         </app-place-media-gallery>
@@ -36,13 +47,6 @@
 
       <!-- COLONNE LATÉRALE -->
       <div class="space-y-6">
-        <app-place-admin-actions
-          [place]="place"
-          [isAdmin]="isAdmin"
-          (edit)="openEditModal($event)"
-          (delete)="onDeletePlace($event)">
-        </app-place-admin-actions>
-
         <app-place-map-card
           [mapOptions]="mapOptions"
           [mapLayers]="mapLayers">
@@ -67,18 +71,3 @@
     Chargement du lieu...
   </div>
 </ng-template>
-
-<!--
-  L'ancien template complet a été sauvegardé dans :
-    - place-detail.component.html.before-refactor
-
-  Tu peux maintenant découper ce fichier d'origine
-  et copier les blocs HTML pertinents dans les sous-composants :
-    - place-header.component.html
-    - place-info.component.html
-    - place-admin-actions.component.html
-    - place-media-gallery.component.html
-    - place-comments.component.html
-    - place-map-card.component.html
-    - place-edit-modal.component.html
--->

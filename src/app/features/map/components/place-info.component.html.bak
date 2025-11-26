@@ -1,11 +1,15 @@
 <div *ngIf="place as p" class="bg-white rounded-xl shadow-sm p-4 md:p-6 space-y-4">
   <h2 class="text-lg font-semibold text-gray-900">À propos de ce lieu</h2>
-
   <p class="text-sm text-gray-700 whitespace-pre-line">
     {{ p.description }}
   </p>
 
-  <div class="space-y-3 text-sm text-gray-700">
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-700">
+    <div>
+      <div class="font-semibold text-gray-900 mb-1">Localisation</div>
+      <div>Latitude : {{ p.latitude }}</div>
+      <div>Longitude : {{ p.longitude }}</div>
+    </div>
     <div>
       <div class="font-semibold text-gray-900 mb-1">Catégories</div>
       <div class="flex flex-wrap gap-1">

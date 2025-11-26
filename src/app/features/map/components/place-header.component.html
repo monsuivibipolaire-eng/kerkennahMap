@@ -13,29 +13,35 @@
 
   <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
 
-  <div class="relative z-10 max-w-5xl mx-auto px-4 md:px-8 h-full flex flex-col justify-end pb-8">
-    <div class="flex items-center gap-2 mb-3">
-      <span class="px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/90 text-white uppercase tracking-wide">
-        {{ p.categories[0] || 'Lieu' }}
-      </span>
-
+  <!-- Bandeau haut : catégories + statut -->
+  <div class="absolute top-4 left-4 right-4 z-20 flex items-start justify-between gap-4">
+    <div class="flex flex-wrap gap-2">
       <span
-        class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold"
-        [ngClass]="{
-          'bg-yellow-400 text-gray-900': p.status === 'pending',
-          'bg-green-500 text-white': p.status === 'approved',
-          'bg-red-500 text-white': p.status === 'rejected'
-        }"
+        *ngFor="let cat of p.categories"
+        class="px-3 py-1 rounded-full text-xs font-semibold bg-black/60 text-white uppercase tracking-wide border border-white/20"
       >
-        <ng-container [ngSwitch]="p.status">
-          <span *ngSwitchCase="'pending'">⏳ En attente</span>
-          <span *ngSwitchCase="'approved'">✅ Validé</span>
-          <span *ngSwitchCase="'rejected'">❌ Rejeté</span>
-          <span *ngSwitchDefault>ℹ️ Statut inconnu</span>
-        </ng-container>
+        {{ cat }}
       </span>
     </div>
 
+    <span
+      class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold"
+      [ngClass]="{
+        'bg-yellow-400 text-gray-900': p.status === 'pending',
+        'bg-green-500 text-white': p.status === 'approved',
+        'bg-red-500 text-white': p.status === 'rejected'
+      }"
+    >
+      <ng-container [ngSwitch]="p.status">
+        <span *ngSwitchCase="'pending'">⏳ En attente</span>
+        <span *ngSwitchCase="'approved'">✅ Validé</span>
+        <span *ngSwitchCase="'rejected'">❌ Rejeté</span>
+        <span *ngSwitchDefault>ℹ️ Statut inconnu</span>
+      </ng-container>
+    </span>
+  </div>
+
+  <div class="relative z-10 max-w-5xl mx-auto px-4 md:px-8 h-full flex flex-col justify-end pb-8">
     <h1 class="text-3xl md:text-4xl font-extrabold text-white mb-3 drop-shadow-lg">
       {{ p.name }}
     </h1>
@@ -47,15 +53,6 @@
         <span class="text-gray-300">/ 5</span>
         <span class="text-gray-300">•</span>
         <span>{{ commentsCount }} avis</span>
-      </div>
-
-      <div class="flex flex-wrap gap-2">
-        <span
-          *ngFor="let cat of p.categories"
-          class="px-2 py-0.5 rounded-full bg-white/15 border border-white/20 text-xs"
-        >
-          {{ cat }}
-        </span>
       </div>
     </div>
   </div>

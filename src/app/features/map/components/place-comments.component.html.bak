@@ -4,25 +4,13 @@
   <div *ngIf="isLoggedIn; else mustLogin" class="space-y-3">
     <div class="flex items-center gap-2 text-sm">
       <span class="font-medium">Votre note :</span>
-
-      <div class="flex items-center gap-1">
-        <button
-          *ngFor="let r of [1,2,3,4,5]"
-          type="button"
-          class="text-xl focus:outline-none"
-          (click)="newRating = r"
-        >
-          <span
-            [ngClass]="{
-              'text-yellow-400': newRating >= r,
-              'text-gray-300': newRating < r
-            }"
-          >
-            ★
-          </span>
-        </button>
-        <span class="text-xs text-gray-500 ml-2">{{ newRating }}/5</span>
-      </div>
+      <select
+        class="border border-gray-300 rounded-md px-2 py-1 text-sm"
+        [(ngModel)]="newRating"
+      >
+        <option *ngFor="let r of [1,2,3,4,5]" [ngValue]="r">{{ r }}</option>
+      </select>
+      <span class="text-yellow-400">★</span>
     </div>
 
     <textarea
