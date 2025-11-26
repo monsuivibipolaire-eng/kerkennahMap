@@ -514,10 +514,24 @@ export class PlaceDetailComponent implements OnInit {
   }
 
   // Handler appelé par app-place-comments lorsqu'on soumet un commentaire
+  
+  // ===== Auto-wired handler: ajoute le commentaire dans la liste locale =====
   onSubmitComment(event: { rating: number; text: string }) {
-    // TODO: implémenter la logique d’envoi de commentaire
-    console.warn('[PlaceDetailComponent] onSubmitComment stub - implement me', event);
+    (this as any).isSubmittingComment = true;
+
+    const newComment: any = {
+      rating: event.rating,
+      comment: event.text,
+      userName: (this as any).currentUserName ?? 'Vous',
+      createdAt: new Date().toISOString()
+    };
+
+    const current = (this as any).comments || [];
+    (this as any).comments = [newComment, ...current];
+
+    (this as any).isSubmittingComment = false;
   }
+
 
   // Handler appelé par app-place-edit-modal lorsqu'on sauvegarde le lieu édité
   onSaveEditedPlace(updatedPlace: any) {
