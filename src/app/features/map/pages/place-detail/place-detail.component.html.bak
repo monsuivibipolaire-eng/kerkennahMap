@@ -1,21 +1,3 @@
-#!/usr/bin/env bash
-set -euo pipefail
-
-ROOT="$(cd "$(dirname "$0")" && pwd)"
-
-HTML="$ROOT/src/app/features/map/pages/place-detail/place-detail.component.html"
-
-if [[ ! -f "$HTML" ]]; then
-  echo "❌ Fichier place-detail.component.html introuvable à partir de $ROOT"
-  exit 1
-fi
-
-echo "💾 Backup de l'ancien HTML..."
-cp "$HTML" "$HTML.bak"
-
-echo "✍️ Réécriture complète du fichier HTML avec galerie AU-DESSUS de la carte..."
-
-cat <<'EOF_HTML' > "$HTML"
 <div class="min-h-screen bg-gray-50 pb-12" *ngIf="place$ | async as place; else loading">
 
   <!-- HERO -->
@@ -88,22 +70,7 @@ cat <<'EOF_HTML' > "$HTML"
   <div class="max-w-6xl mx-auto px-4 mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
     <!-- Colonne principale -->
     <div class="space-y-6 lg:col-span-2">
-
-      <!-- ✅ GALERIE PHOTOS EN PREMIER -->
-      <div *ngIf="place.images && place.images.length > 0" class="bg-white rounded-2xl shadow-sm p-6">
-        <h3 class="text-lg font-semibold text-gray-800 mb-3">Galerie photos</h3>
-        <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <img
-            *ngFor="let img of place.images; let i = index"
-            [src]="img"
-            (click)="openMediaViewerFromImage(place, i)"
-            class="w-full h-32 md:h-40 object-cover rounded-xl border border-gray-200 hover:opacity-90 transition cursor-pointer"
-            alt="Photo de {{ place.name }}"
-          />
-        </div>
-      </div>
-
-      <!-- CARTE (LOCALISATION) -->
+      <!-- Carte -->
       <div class="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
         <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
           <div>
@@ -123,7 +90,7 @@ cat <<'EOF_HTML' > "$HTML"
         </div>
       </div>
 
-      <!-- Infos & vidéos -->
+      <!-- Infos & galerie -->
       <div class="space-y-6">
         <!-- Infos générales -->
         <div class="bg-white rounded-2xl shadow-sm p-6">
@@ -135,7 +102,6 @@ cat <<'EOF_HTML' > "$HTML"
           </p>
         </div>
 
-        <!-- Vidéos -->
         <div *ngIf="place.videos && place.videos.length > 0" class="bg-white rounded-2xl shadow-sm p-6">
           <h3 class="text-lg font-semibold text-gray-800 mb-3">Vidéos</h3>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -479,58 +445,58 @@ cat <<'EOF_HTML' > "$HTML"
     </form>
   </div>
 
-  <!-- Galerie plein écran (images + vidéos) -->
-  <div
-    *ngIf="showMediaViewer"
-    class="fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center"
+<!-- Galerie plein écran (images + vidéos) -->
+<div
+  *ngIf="showMediaViewer"
+  class="fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center"
+>
+  <!-- Bouton fermer -->
+  <button
+    type="button"
+    (click)="closeMediaViewer()"
+    class="absolute top-4 right-4 md:top-6 md:right-6 text-white text-2xl md:text-3xl font-bold focus:outline-none"
+    aria-label="Fermer la galerie"
   >
-    <!-- Bouton fermer -->
-    <button
-      type="button"
-      (click)="closeMediaViewer()"
-      class="absolute top-4 right-4 md:top-6 md:right-6 text-white text-2xl md:text-3xl font-bold focus:outline-none"
-      aria-label="Fermer la galerie"
-    >
-      ✕
-    </button>
+    ✕
+  </button>
 
-    <!-- Bouton précédent -->
-    <button
-      type="button"
-      (click)="prevMedia()"
-      class="absolute left-3 md:left-6 text-white text-3xl md:text-4xl font-bold px-2 md:px-4 py-1 md:py-2 rounded-full bg-black/40 hover:bg-black/60 focus:outline-none"
-      aria-label="Média précédent"
-    >
-      ‹
-    </button>
+  <!-- Bouton précédent -->
+  <button
+    type="button"
+    (click)="prevMedia()"
+    class="absolute left-3 md:left-6 text-white text-3xl md:text-4xl font-bold px-2 md:px-4 py-1 md:py-2 rounded-full bg-black/40 hover:bg-black/60 focus:outline-none"
+    aria-label="Média précédent"
+  >
+    ‹
+  </button>
 
-    <!-- Contenu média -->
-    <div class="max-w-5xl w-full px-4">
-      <img
-        *ngIf="currentMedia?.type === 'image'"
-        [src]="currentMedia?.src"
-        class="w-full max-h-[80vh] object-contain mx-auto rounded-xl shadow-lg"
-        alt="Média du lieu"
-      />
-      <video
-        *ngIf="currentMedia?.type === 'video'"
-        [src]="currentMedia?.src"
-        controls
-        autoplay
-        class="w-full max-h-[80vh] mx-auto rounded-xl shadow-lg bg-black"
-      ></video>
-    </div>
-
-    <!-- Bouton suivant -->
-    <button
-      type="button"
-      (click)="nextMedia()"
-      class="absolute right-3 md:right-6 text-white text-3xl md:text-4xl font-bold px-2 md:px-4 py-1 md:py-2 rounded-full bg-black/40 hover:bg-black/60 focus:outline-none"
-      aria-label="Média suivant"
-    >
-      ›
-    </button>
+  <!-- Contenu média -->
+  <div class="max-w-5xl w-full px-4">
+    <img
+      *ngIf="currentMedia?.type === 'image'"
+      [src]="currentMedia?.src"
+      class="w-full max-h-[80vh] object-contain mx-auto rounded-xl shadow-lg"
+      alt="Média du lieu"
+    />
+    <video
+      *ngIf="currentMedia?.type === 'video'"
+      [src]="currentMedia?.src"
+      controls
+      autoplay
+      class="w-full max-h-[80vh] mx-auto rounded-xl shadow-lg bg-black"
+    ></video>
   </div>
+
+  <!-- Bouton suivant -->
+  <button
+    type="button"
+    (click)="nextMedia()"
+    class="absolute right-3 md:right-6 text-white text-3xl md:text-4xl font-bold px-2 md:px-4 py-1 md:py-2 rounded-full bg-black/40 hover:bg-black/60 focus:outline-none"
+    aria-label="Média suivant"
+  >
+    ›
+  </button>
+</div>
 </div>
 
 <ng-template #loading>
@@ -541,7 +507,3 @@ cat <<'EOF_HTML' > "$HTML"
     </div>
   </div>
 </ng-template>
-EOF_HTML
-
-echo "✅ Nouveau HTML écrit avec succès (galerie au-dessus de la carte)."
-echo "📦 Backup disponible : $HTML.bak"
