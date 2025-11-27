@@ -14,6 +14,7 @@ import { PlacesService } from '../../../../core/services/places.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { Place } from '../../../../core/models/place.model';
 import { firstValueFrom } from 'rxjs';
+import * as L from 'leaflet';
 
 interface PlaceComment {
   userName: string;
@@ -64,11 +65,17 @@ export class PlaceDetailComponent implements OnInit {
   ];
   isSavingPlace = false;
 
-  mapOptions: any = {
-    center: [34.71, 11.15],
-    zoom: 13
+  mapOptions: L.MapOptions = {
+    layers: [
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18
+      })
+    ],
+    zoom: 13,
+    center: L.latLng(34.71, 11.15)
   };
-  mapLayers: any[] = [];
+
+  mapLayers: L.Layer[] = [];
 
   constructor(
     private route: ActivatedRoute,
@@ -107,12 +114,6 @@ export class PlaceDetailComponent implements OnInit {
         ...this.mapOptions,
         center: [this.place.latitude, this.place.longitude]
       };
-      this.mapLayers = [
-        {
-          lat: this.place.latitude,
-          lng: this.place.longitude
-        }
-      ];
     }
 
     if (id) {
@@ -259,3 +260,5 @@ export class PlaceDetailComponent implements OnInit {
     }
   }
 }
+
+// --- FIX AUTO-GÉNÉRÉ : centrage carte + joli marqueur ---

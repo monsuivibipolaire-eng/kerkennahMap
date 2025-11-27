@@ -5,7 +5,9 @@
     <app-place-header
       [place]="p"
       [averageRating]="averageRating"
-      [commentsCount]="comments.length">
+      [commentsCount]="comments.length"
+      [isLoggedIn]="isLoggedIn"
+      [currentUserName]="currentUserName">
     </app-place-header>
 
     <!-- Actions admin (modifier / supprimer) -->
@@ -49,11 +51,22 @@
       </div>
 
       <!-- Carte -->
-      <div>
+      <div class="space-y-3">
         <app-place-map-card
           [mapOptions]="mapOptions"
           [mapLayers]="mapLayers">
         </app-place-map-card>
+
+        <a
+          *ngIf="p.latitude && p.longitude"
+          class="inline-flex items-center px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
+          style="display: block;margin: 0 auto;width: 60%;text-align: center;"
+          [href]="'https://www.google.com/maps/search/?api=1&query=' + p.latitude + ',' + p.longitude"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Ouvrir dans Google Maps
+        </a>
       </div>
 
     </div>

@@ -13,6 +13,15 @@ import { provideFirestore, getFirestore } from '@angular/fire/firestore';
 import { FIREBASE_OPTIONS } from '@angular/fire/compat';
 
 import { environment } from './environments/environment';
+import * as L from 'leaflet';
+// Configuration des icônes par défaut Leaflet pour Angular
+// (évite les 404 sur /media/marker-icon-2x.png)
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'assets/leaflet/marker-icon-2x.png',
+  iconUrl: 'assets/leaflet/marker-icon.png',
+  shadowUrl: 'assets/leaflet/marker-shadow.png'
+});
+
 
 bootstrapApplication(AppComponent, {
   providers: [
