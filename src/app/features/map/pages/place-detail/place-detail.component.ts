@@ -1,23 +1,19 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { PlaceHeaderComponent } from '../../components/place-header.component';
-import { PlaceInfoComponent } from '../../components/place-info.component';
+import { ActivatedRoute, Router, RouterModule } from '@angular/router';
+
 import { PlaceAdminActionsComponent } from '../../components/place-admin-actions.component';
-import { PlaceCommentsComponent } from '../../components/place-comments.component';
+import { PlaceHeaderComponent } from '../../components/place-header.component';
 import { PlaceMediaGalleryComponent } from '../../components/place-media-gallery.component';
+import { PlaceInfoComponent } from '../../components/place-info.component';
+import { PlaceCommentsComponent } from '../../components/place-comments.component';
 import { PlaceMapCardComponent } from '../../components/place-map-card.component';
 import { PlaceEditModalComponent } from '../../components/place-edit-modal.component';
-import { ActivatedRoute, RouterModule, Router } from '@angular/router';
-import { LeafletModule } from '@bluehalo/ngx-leaflet';
-import * as L from 'leaflet';
-import { Observable, of } from 'rxjs';
-import { switchMap, tap, map } from 'rxjs/operators';
-import { FormsModule } from '@angular/forms';
 
 import { PlacesService } from '../../../../core/services/places.service';
-import { Place } from '../../../../core/models/place.model';
 import { AuthService } from '../../../../core/services/auth.service';
-import { SupabaseImageService } from '../../../../core/services/supabase-image.service';
+import { Place } from '../../../../core/models/place.model';
+import { firstValueFrom } from 'rxjs';
 
 interface PlaceComment {
   userName: string;
@@ -29,516 +25,237 @@ interface PlaceComment {
 @Component({
   selector: 'app-place-detail',
   standalone: true,
-  imports: [CommonModule, PlaceHeaderComponent, PlaceInfoComponent, PlaceAdminActionsComponent, PlaceCommentsComponent, PlaceMediaGalleryComponent, PlaceMapCardComponent, PlaceEditModalComponent],
+  imports: [
+    CommonModule,
+    RouterModule,
+    PlaceAdminActionsComponent,
+    PlaceHeaderComponent,
+    PlaceMediaGalleryComponent,
+    PlaceInfoComponent,
+    PlaceCommentsComponent,
+    PlaceMapCardComponent,
+    PlaceEditModalComponent
+  ],
   templateUrl: './place-detail.component.html',
-  styleUrls: ['./place-detail.component.css']
+  styleUrls: ['./place-detail.component.scss']
 })
 export class PlaceDetailComponent implements OnInit {
-  private route = inject(ActivatedRoute);
-  private router = inject(Router);
-  private placesService = inject(PlacesService);
-  private authService = inject(AuthService);
-  private supabaseImageService = inject(SupabaseImageService);
+  // Peut être null ou undefined selon le service
+  place: Place | null | undefined = null;
 
-  // Place affichée
-  place$: Observable<Place | undefined> = of(undefined);
+  comments: PlaceComment[] = [];
 
-  // Admin / connexion
   isAdmin = false;
   isLoggedIn = false;
-  currentUserName: string | null = null;
-  currentPlaceId: string | null = null;
+  currentUserName = '';
+  isSubmittingComment = false;
 
-  // Modal édition
-  showEditModal = false;
-  editingPlace: Place | null = null;
-
-  // Upload états
   uploadingImages = false;
   uploadingVideos = false;
   uploadError: string | null = null;
 
-  // Galerie plein écran
-  showMediaViewer = false;
-  mediaViewerItems: { type: 'image' | 'video'; src: string }[] = [];
-  mediaViewerIndex = 0;
-
-  // Avis / commentaires
-  comments: PlaceComment[] = [];
-  newCommentRating = 5;
-  newCommentText = '';
-  isSubmittingComment = false;
-
-  // Liste de catégories disponibles
+  showEditModal = false;
+  editingPlace: Place | null = null;
   availableCategories: string[] = [
-    'Restaurant',
-    'Fruits de mer',
-    'Café',
-    'Fast-food',
-    'Pizzeria',
-    'Boulangerie',
-    'Glacier',
-    'Bar',
-    'Hôtel',
     'Hébergement',
-    'Activité',
-    'Culture',
-    'Sport',
-    'Shopping',
-    'Autre'
+    'Restaurant',
+    'Site à visiter',
+    'Transport'
   ];
+  isSavingPlace = false;
 
-  // Config Leaflet
-  mapOptions: L.MapOptions = {
-    layers: [
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 18
-      })
-    ],
-    zoom: 14,
-    center: L.latLng(34.71, 11.15)
+  mapOptions: any = {
+    center: [34.71, 11.15],
+    zoom: 13
   };
+  mapLayers: any[] = [];
 
-  mapLayers: L.Layer[] = [];
+  constructor(
+    private route: ActivatedRoute,
+    private router: Router,
+    private placesService: PlacesService,
+    private authService: AuthService
+  ) {}
 
-  constructor() {
-    // Patch icônes Leaflet (pour éviter les problèmes de bundling)
-    const iconRetinaUrl =
-      'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png';
-    const iconUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png';
-    const shadowUrl =
-      'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png';
+  async ngOnInit(): Promise<void> {
+    const id = this.route.snapshot.paramMap.get('id');
+    if (!id) {
+      return;
+    }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (L.Marker as any).prototype.options.icon = L.icon({
-      iconRetinaUrl,
-      iconUrl,
-      shadowUrl,
-      iconSize: [25, 41],
-      iconAnchor: [12, 41],
-      popupAnchor: [1, -34],
-      shadowSize: [41, 41]
+    this.place = await firstValueFrom(this.placesService.getPlaceById(id));
+
+    const user = await firstValueFrom(this.authService.user$);
+
+    this.isLoggedIn = !!user;
+    this.isAdmin =
+      !!user &&
+      Array.isArray((user as any).roles) &&
+      (user as any).roles.includes('admin');
+
+    this.currentUserName =
+      (user as any)?.displayName ||
+      (user as any)?.email ||
+      'Utilisateur';
+
+    if (
+      this.place &&
+      typeof this.place.latitude === 'number' &&
+      typeof this.place.longitude === 'number'
+    ) {
+      this.mapOptions = {
+        ...this.mapOptions,
+        center: [this.place.latitude, this.place.longitude]
+      };
+      this.mapLayers = [
+        {
+          lat: this.place.latitude,
+          lng: this.place.longitude
+        }
+      ];
+    }
+
+    if (id) {
+      this.loadCommentsFromStorage(id);
+    }
+  }
+
+  get hasPlace(): boolean {
+    return !!this.place;
+  }
+
+  get averageRating(): number {
+    if (!this.comments.length) {
+      return 0;
+    }
+    const sum = this.comments.reduce((acc, c) => acc + c.rating, 0);
+    return sum / this.comments.length;
+  }
+
+  private loadCommentsFromStorage(placeId: string): void {
+    try {
+      const key = `place-comments-${placeId}`;
+      const raw = localStorage.getItem(key);
+      if (!raw) {
+        this.comments = [];
+        return;
+      }
+      const parsed = JSON.parse(raw) as any[];
+      this.comments = parsed.map((c) => ({
+        userName: c.userName || 'Utilisateur',
+        rating: c.rating,
+        comment: c.comment,
+        createdAt: new Date(c.createdAt)
+      }));
+    } catch (e) {
+      console.error('Erreur lors du chargement des commentaires', e);
+      this.comments = [];
+    }
+  }
+
+  private saveCommentsToStorage(): void {
+    if (!this.place || !this.place.id) {
+      return;
+    }
+    try {
+      const key = `place-comments-${this.place.id}`;
+      const payload = this.comments.map((c) => ({
+        ...c,
+        createdAt: c.createdAt.toISOString()
+      }));
+      localStorage.setItem(key, JSON.stringify(payload));
+    } catch (e) {
+      console.error('Erreur lors de la sauvegarde des commentaires', e);
+    }
+  }
+
+  // === Actions administrateur ===
+
+  openEditModal(): void {
+    if (!this.place) {
+      return;
+    }
+    this.editingPlace = JSON.parse(JSON.stringify(this.place));
+    this.showEditModal = true;
+  }
+
+  closeEditModal(): void {
+    this.showEditModal = false;
+  }
+
+  onDeletePlace(): void {
+    if (!this.place || !this.place.id) {
+      return;
+    }
+    if (!confirm('Supprimer ce lieu ?')) {
+      return;
+    }
+    this.placesService.deletePlace(this.place.id).then(() => {
+      this.router.navigate(['/']);
     });
   }
 
-  ngOnInit(): void {
-    // Gestion connexion / admin avec AuthService (façon "safe" via any)
-    const anyAuth = this.authService as any;
+  // === Upload média depuis app-place-media-gallery ===
+  // Ici on accepte n'importe quel type (FileList, string[], ...)
 
-    if (anyAuth.user$ && typeof anyAuth.user$.subscribe === 'function') {
-      anyAuth.user$.subscribe((user: any) => {
-        this.isLoggedIn = !!user;
-        if (user) {
-          this.currentUserName =
-            user.fullName || user.name || 'Utilisateur';
-
-          if (Array.isArray(user.roles)) {
-            this.isAdmin = user.roles.includes('admin');
-          }
-        } else {
-          this.currentUserName = null;
-          this.isAdmin = false;
-        }
-      });
-    } else if (anyAuth.isLoggedIn$ && typeof anyAuth.isLoggedIn$.subscribe === 'function') {
-      anyAuth.isLoggedIn$.subscribe((logged: any) => {
-        this.isLoggedIn = !!logged;
-      });
-    } else if (typeof anyAuth.isLoggedIn === 'boolean') {
-      this.isLoggedIn = anyAuth.isLoggedIn;
-    }
-
-    // Récupérer la place & normaliser les dates
-    this.place$ = this.route.paramMap.pipe(
-      switchMap((params) => {
-        const id = params.get('id');
-        if (!id) {
-          return of(undefined);
-        }
-        return this.placesService.getPlaceById(id);
-      }),
-      map((place: Place | undefined) =>
-        place ? this.normalizePlaceDates(place) : undefined
-      ),
-      tap((place) => {
-        if (place) {
-          this.updateMap(place);
-        }
-      })
-    );
+  onUploadImages(event: any): void {
+    console.log('onUploadImages event', event);
+    // La logique d’upload réelle est probablement dans le composant enfant.
+    // Ici on pourrait plus tard mettre à jour this.place / this.editingPlace si besoin.
   }
 
-  /**
-   * Convertit les champs de type Timestamp / string / number en Date
-   * pour que le DatePipe Angular les accepte.
-   */
-  private normalizePlaceDates(place: Place): Place {
-    const convert = (v: any): Date | undefined => {
-      if (!v) return undefined;
-      if (v instanceof Date) return v;
-      // Firestore / Supabase Timestamp avec méthode toDate()
-      if (typeof v.toDate === 'function') return v.toDate();
-      // Objet { seconds, nanoseconds }
-      if (typeof v.seconds === 'number') {
-        return new Date(v.seconds * 1000);
-      }
-      // nombre (ms)
-      if (typeof v === 'number') return new Date(v);
-      // string parsable
-      const parsed = new Date(v);
-      if (!isNaN(parsed.getTime())) return parsed;
-      return undefined;
-    };
-
-    return {
-      ...place,
-      createdAt: convert((place as any).createdAt) as any,
-      updatedAt: convert((place as any).updatedAt) as any,
-      validatedAt: convert((place as any).validatedAt) as any
-    };
+  onUploadVideos(event: any): void {
+    console.log('onUploadVideos event', event);
   }
 
-  private updateMap(place: Place) {
-    if (place.latitude && place.longitude) {
-      this.mapOptions = {
-        ...this.mapOptions,
-        center: L.latLng(place.latitude, place.longitude)
-      };
+  // === Commentaires (app-place-comments) ===
 
-      this.mapLayers = [
-        L.marker([place.latitude, place.longitude]).bindPopup(place.name)
-      ];
-    }
-  }
-
-  // -------- AVIS / COMMENTAIRES --------
-
-  get averageRating(): number | null {
-    if (!this.comments.length) {
-      return null;
-    }
-    const sum = this.comments.reduce((acc, c) => acc + c.rating, 0);
-    return Math.round((sum / this.comments.length) * 10) / 10;
-  }
-
-  submitComment(): void {
-    if (!this.isLoggedIn) {
-      return;
-    }
-    const text = this.newCommentText.trim();
-    if (!text) {
+  onSubmitComment(event: any): void {
+    if (!this.place || !this.place.id) {
       return;
     }
 
     this.isSubmittingComment = true;
 
     const newComment: PlaceComment = {
-      userName: this.currentUserName || 'Utilisateur',
-      rating: this.newCommentRating,
-      comment: text,
+      userName: event.userName || this.currentUserName || 'Utilisateur',
+      rating: event.rating,
+      comment: event.comment ?? event.text ?? '',
       createdAt: new Date()
     };
 
-    // Pour l’instant, stockage local uniquement (pas de backend)
     this.comments = [newComment, ...this.comments];
+    this.saveCommentsToStorage();
 
-    this.newCommentText = '';
-    this.newCommentRating = 5;
     this.isSubmittingComment = false;
   }
 
-  // -------- MODAL ÉDITION --------
+  // === Sauvegarde depuis la modale d’édition ===
 
-  openEditModal(place: Place) {
-    this.uploadError = null;
-    this.uploadingImages = false;
-    this.uploadingVideos = false;
-
-    // On clone la place pour ne pas modifier l'original tant que ce n'est pas sauvegardé
-    this.editingPlace = {
-      ...place,
-      images: [...(place.images || [])],
-      videos: [...(place.videos || [])],
-      categories: [...(place.categories || [])]
-    };
-    this.showEditModal = true;
-  }
-
-  closeEditModal() {
-    this.showEditModal = false;
-    this.editingPlace = null;
-    this.uploadError = null;
-    this.uploadingImages = false;
-    this.uploadingVideos = false;
-  }
-
-  // -------- CATEGORIES --------
-
-  toggleCategory(category: string) {
-    if (!this.editingPlace) return;
-
-    const categories = this.editingPlace.categories || [];
-    const index = categories.indexOf(category);
-    if (index > -1) {
-      categories.splice(index, 1);
-    } else {
-      categories.push(category);
+  onSaveEditedPlace(event: any): void {
+    if (event) {
+      this.editingPlace = event as Place;
     }
-    this.editingPlace = {
-      ...this.editingPlace,
-      categories: [...categories]
-    };
+    this.savePlace();
   }
 
-  // -------- IMAGES --------
-
-  async onImagesSelected(event: Event) {
-    if (!this.editingPlace) return;
-
-    const input = event.target as HTMLInputElement;
-    if (!input.files || input.files.length === 0) return;
-
-    const files = Array.from(input.files);
-
-    this.uploadingImages = true;
-    this.uploadError = null;
+  private async savePlace(): Promise<void> {
+    if (!this.editingPlace || !this.editingPlace.id) {
+      return;
+    }
 
     try {
-      const baseId = this.editingPlace.id || 'temp';
-      const uploadPromises = files.map((file, index) =>
-        this.supabaseImageService.uploadImage(
-          file,
-          `places/${baseId}/images/${Date.now()}-${index}-${file.name}`
-        )
+      this.isSavingPlace = true;
+      await this.placesService.updatePlace(
+        this.editingPlace.id,
+        this.editingPlace
       );
-
-      const results = await Promise.all(uploadPromises);
-      const urls = results.filter((u): u is string => !!u);
-
-      const existing = this.editingPlace.images || [];
-      this.editingPlace = {
-        ...this.editingPlace,
-        images: [...existing, ...urls]
-      };
-    } catch (err) {
-      console.error('Erreur upload images', err);
-      this.uploadError = "Erreur lors de l'upload des images.";
+      this.place = this.editingPlace;
+      this.showEditModal = false;
+    } catch (e) {
+      console.error('Erreur lors de la sauvegarde du lieu', e);
     } finally {
-      this.uploadingImages = false;
+      this.isSavingPlace = false;
     }
   }
-
-  removeImage(index: number) {
-    if (!this.editingPlace) return;
-    const images = [...(this.editingPlace.images || [])];
-    images.splice(index, 1);
-    this.editingPlace = {
-      ...this.editingPlace,
-      images
-    };
-  }
-
-  // -------- VIDEOS --------
-
-  async onVideosSelected(event: Event) {
-    if (!this.editingPlace) return;
-
-    const input = event.target as HTMLInputElement;
-    if (!input.files || input.files.length === 0) return;
-
-    const files = Array.from(input.files);
-
-    this.uploadingVideos = true;
-    this.uploadError = null;
-
-    try {
-      const baseId = this.editingPlace.id || 'temp';
-      const uploadPromises = files.map((file, index) =>
-        // On réutilise uploadImage pour les vidéos (Supabase se fiche du type)
-        this.supabaseImageService.uploadImage(
-          file,
-          `places/${baseId}/videos/${Date.now()}-${index}-${file.name}`
-        )
-      );
-
-      const results = await Promise.all(uploadPromises);
-      const urls = results.filter((u): u is string => !!u);
-
-      const existing = this.editingPlace.videos || [];
-      this.editingPlace = {
-        ...this.editingPlace,
-        videos: [...existing, ...urls]
-      };
-    } catch (err) {
-      console.error('Erreur upload vidéos', err);
-      this.uploadError = "Erreur lors de l'upload des vidéos.";
-    } finally {
-      this.uploadingVideos = false;
-    }
-  }
-
-  removeVideo(index: number) {
-    if (!this.editingPlace) return;
-    const videos = [...(this.editingPlace.videos || [])];
-    videos.splice(index, 1);
-    this.editingPlace = {
-      ...this.editingPlace,
-      videos
-    };
-  }
-
-  // -------- SAUVEGARDE --------
-
-  async savePlace() {
-    if (!this.editingPlace || !this.editingPlace.id) return;
-
-    const id = this.editingPlace.id;
-
-    const payload: Partial<Place> = {
-      ...this.editingPlace,
-      updatedAt: new Date()
-    };
-
-    try {
-      await this.placesService.updatePlace(id, payload);
-      this.closeEditModal();
-
-      // Recharger la place pour raffraîchir l'affichage
-      this.place$ = this.placesService.getPlaceById(id).pipe(
-        map((place) => (place ? this.normalizePlaceDates(place) : undefined)),
-        tap((place) => {
-          if (place) {
-            this.updateMap(place);
-          }
-        })
-      );
-    } catch (err) {
-      console.error('Erreur lors de la mise à jour du lieu', err);
-      this.uploadError = 'Erreur lors de la sauvegarde du lieu.';
-    }
-  }
-
-  // -------- SUPPRESSION --------
-
-  async onDeletePlace(place: Place) {
-    if (!this.isAdmin || !place.id) return;
-
-    const ok = window.confirm(
-      'Êtes-vous sûr de vouloir supprimer définitivement ce lieu ?'
-    );
-    if (!ok) return;
-
-    try {
-      await this.placesService.deletePlace(place.id);
-      this.router.navigate(['/']);
-    } catch (err) {
-      console.error('Erreur lors de la suppression du lieu', err);
-      alert('Erreur lors de la suppression du lieu.');
-    }
-  }
-
-  // ---------- GALERIE PLEIN ÉCRAN (images + vidéos) ----------
-
-  openMediaViewerFromImage(place: Place, imageIndex: number): void {
-    const images = place.images ?? [];
-    const videos = place.videos ?? [];
-
-    this.mediaViewerItems = [
-      ...images.map((src) => ({ type: 'image' as const, src })),
-      ...videos.map((src) => ({ type: 'video' as const, src }))
-    ];
-
-    this.mediaViewerIndex = Math.min(
-      Math.max(imageIndex, 0),
-      this.mediaViewerItems.length - 1
-    );
-    this.showMediaViewer = this.mediaViewerItems.length > 0;
-  }
-
-  openMediaViewerFromVideo(place: Place, videoIndex: number): void {
-    const images = place.images ?? [];
-    const videos = place.videos ?? [];
-
-    this.mediaViewerItems = [
-      ...images.map((src) => ({ type: 'image' as const, src })),
-      ...videos.map((src) => ({ type: 'video' as const, src }))
-    ];
-
-    const startIndex = images.length + videoIndex;
-    this.mediaViewerIndex = Math.min(
-      Math.max(startIndex, 0),
-      this.mediaViewerItems.length - 1
-    );
-    this.showMediaViewer = this.mediaViewerItems.length > 0;
-  }
-
-  closeMediaViewer(): void {
-    this.showMediaViewer = false;
-  }
-
-  nextMedia(): void {
-    if (!this.mediaViewerItems.length) return;
-    this.mediaViewerIndex =
-      (this.mediaViewerIndex + 1) % this.mediaViewerItems.length;
-  }
-
-  prevMedia(): void {
-    if (!this.mediaViewerItems.length) return;
-    this.mediaViewerIndex =
-      (this.mediaViewerIndex - 1 + this.mediaViewerItems.length) %
-      this.mediaViewerItems.length;
-  }
-
-  get currentMedia():
-    | { type: 'image' | 'video'; src: string }
-    | null {
-    if (!this.mediaViewerItems.length) return null;
-    return this.mediaViewerItems[this.mediaViewerIndex];
-  }
-
-  // ===== Auto-added stubs for place-detail refactor =====
-  // TODO: remplace ces stubs par ta vraie logique (upload, commentaires, édition, etc.)
-
-  // Indique si un enregistrement de lieu est en cours (utilisé par app-place-edit-modal)
-  isSavingPlace = false;
-
-  // Handler appelé par app-place-media-gallery lorsqu'on ajoute des images
-  onUploadImages(files: FileList) {
-    // TODO: implémenter la logique d'upload d'images
-    console.warn('[PlaceDetailComponent] onUploadImages stub - implement me', files);
-  }
-
-  // Handler appelé par app-place-media-gallery lorsqu'on ajoute des vidéos
-  onUploadVideos(files: FileList) {
-    // TODO: implémenter la logique d'upload de vidéos
-    console.warn('[PlaceDetailComponent] onUploadVideos stub - implement me', files);
-  }
-
-  // Handler appelé par app-place-comments lorsqu'on soumet un commentaire
-  
-  // ===== Auto-wired handler: ajoute le commentaire dans la liste locale =====
-  onSubmitComment(event: { rating: number; text: string }) {
-    (this as any).isSubmittingComment = true;
-
-    const newComment: any = {
-      rating: event.rating,
-      comment: event.text,
-      userName: (this as any).currentUserName ?? 'Vous',
-      createdAt: new Date().toISOString()
-    };
-
-    const current = (this as any).comments || [];
-    (this as any).comments = [newComment, ...current];
-
-    (this as any).isSubmittingComment = false;
-  }
-
-
-  // Handler appelé par app-place-edit-modal lorsqu'on sauvegarde le lieu édité
-  onSaveEditedPlace(updatedPlace: any) {
-    // TODO: implémenter la logique de sauvegarde du lieu (appel API, etc.)
-    console.warn('[PlaceDetailComponent] onSaveEditedPlace stub - implement me', updatedPlace);
-  }
-  // ===== End auto-added stubs for place-detail refactor =====
-
 }

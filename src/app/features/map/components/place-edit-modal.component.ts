@@ -5,12 +5,11 @@ import { LeafletModule } from '@bluehalo/ngx-leaflet';
 import * as L from 'leaflet';
 import { Place } from '../../../core/models/place.model';
 import { SupabaseImageService } from '../../../core/services/supabase-image.service';
-import { PlaceMapCardComponent } from './place-map-card.component';
 
 @Component({
   selector: 'app-place-edit-modal',
   standalone: true,
-  imports: [CommonModule, FormsModule, LeafletModule, PlaceMapCardComponent],
+  imports: [CommonModule, FormsModule, LeafletModule],
   templateUrl: './place-edit-modal.component.html'
 })
 export class PlaceEditModalComponent implements OnChanges {
@@ -22,26 +21,24 @@ export class PlaceEditModalComponent implements OnChanges {
   @Output() cancel = new EventEmitter<void>();
   @Output() save = new EventEmitter<Place>();
 
-  // États d'upload
   uploadingImages = false;
   uploadingVideos = false;
+  saveSuccess = false;
 
-  // Carte
   mapOptions: L.MapOptions = {
     layers: [
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
+        maxZoom: 18,
         attribution: '© OpenStreetMap'
       })
     ],
-    zoom: 14,
+    zoom: 13,
     center: L.latLng(34.71, 11.15)
   };
 
-  mapLayers: L.Layer[] = [];
+  marker: L.Marker | null = null;
 
   constructor(private imageService: SupabaseImageService) {
-    // Patch des icônes Leaflet (comme dans AddPlaceComponent)
     const iconRetinaUrl =
       'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png';
     const iconUrl =
@@ -63,38 +60,61 @@ export class PlaceEditModalComponent implements OnChanges {
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['place'] && this.place) {
-      this.updateMap(this.place.latitude, this.place.longitude);
+      if (!this.place.images) this.place.images = [];
+      if (!this.place.videos) this.place.videos = [];
 
-      if (!this.place.images) {
-        this.place.images = [];
+      if (typeof this.place.latitude === 'number' && typeof this.place.longitude === 'number') {
+        this.mapOptions = {
+          ...this.mapOptions,
+          center: L.latLng(this.place.latitude, this.place.longitude)
+        };
+        this.updateMarker(this.place.latitude, this.place.longitude);
       }
-      if (!this.place.videos) {
-        this.place.videos = [];
-      }
+
+      // Quand on ouvre la modale, on réinitialise le message de succès
+      this.saveSuccess = false;
     }
   }
 
-  private updateMap(lat: number, lng: number): void {
-    this.mapOptions = {
-      ...this.mapOptions,
-      center: L.latLng(lat, lng)
-    };
+  onMapReady(map: L.Map): void {
+    // Clic sur la carte -> déplace le marqueur et met à jour les coords
+    map.on('click', (e: L.LeafletMouseEvent) => {
+      if (!this.place) return;
+      this.place.latitude = e.latlng.lat;
+      this.place.longitude = e.latlng.lng;
+      this.updateMarker(e.latlng.lat, e.latlng.lng);
+    });
 
-    this.mapLayers = [
-      L.marker([lat, lng])
-    ];
+    if (this.place && typeof this.place.latitude === 'number' && typeof this.place.longitude === 'number') {
+      this.updateMarker(this.place.latitude, this.place.longitude);
+      map.setView([this.place.latitude, this.place.longitude], this.mapOptions.zoom || 13);
+    }
+  }
+
+  private updateMarker(lat: number, lng: number): void {
+    if (this.marker) {
+      this.marker.setLatLng([lat, lng]);
+    } else {
+      this.marker = L.marker([lat, lng]);
+    }
+  }
+
+  get mapLayers(): L.Layer[] {
+    return this.marker ? [this.marker] : [];
   }
 
   onCancel(): void {
+    this.saveSuccess = false;
     this.cancel.emit();
   }
 
   onSubmit(): void {
     if (!this.place || this.isSaving) return;
     this.save.emit(this.place);
+    // On cache le formulaire et on affiche un message de succès
+    this.saveSuccess = true;
   }
 
-  // Upload d'IMAGES
   async onImagesSelected(event: Event): Promise<void> {
     if (!this.place) return;
 
@@ -127,7 +147,6 @@ export class PlaceEditModalComponent implements OnChanges {
     }
   }
 
-  // Upload de VIDEOS
   async onVideosSelected(event: Event): Promise<void> {
     if (!this.place) return;
 

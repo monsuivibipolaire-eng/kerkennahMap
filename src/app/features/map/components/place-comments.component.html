@@ -83,7 +83,7 @@
         {{ c.comment }}
       </p>
       <div class="mt-1 text-xs text-gray-400">
-        {{ c.createdAt | date: 'short' }}
+        {{ toDate(c.createdAt) | date: 'short' }}
       </div>
     </div>
   </div>

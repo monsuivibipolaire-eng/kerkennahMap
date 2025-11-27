@@ -1,27 +1,29 @@
-<div *ngIf="isAdmin && place as p" class="bg-white rounded-xl shadow-sm p-4 space-y-3">
-  <h2 class="text-sm font-semibold text-gray-900 flex items-center justify-between">
-    Actions administrateur
-  </h2>
+<div *ngIf="isAdmin" class="absolute top-3 right-3 z-20">
+  <div class="flex flex-col items-end">
 
-  <div class="flex flex-wrap gap-2">
-    <button
-      type="button"
-      class="px-3 py-1.5 rounded-md bg-blue-600 text-xs text-white font-semibold hover:bg-blue-700"
-      (click)="onEdit()"
-    >
-      ✏️ Modifier
-    </button>
+    <!-- Badge Admin -->
+    <div class="px-2 py-1 rounded-md bg-black/60 text-white text-[10px] uppercase tracking-wide">
+      Admin
+    </div>
 
-    <button
-      type="button"
-      class="px-3 py-1.5 rounded-md bg-red-600 text-xs text-white font-semibold hover:bg-red-700"
-      (click)="onDelete()"
-    >
-      🗑️ Supprimer
-    </button>
+    <!-- Boutons -->
+    <div class="mt-1 flex gap-2">
+
+      <button
+        (click)="onEdit()"
+        class="flex items-center gap-1 px-2 py-1 rounded-md bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition"
+      >
+        ✏️ <span class="hidden sm:inline">Modifier</span>
+      </button>
+
+      <button
+        (click)="onDelete()"
+        class="flex items-center gap-1 px-2 py-1 rounded-md bg-red-600 text-white text-xs font-medium hover:bg-red-700 transition"
+      >
+        🗑️ <span class="hidden sm:inline">Supprimer</span>
+      </button>
+
+    </div>
+
   </div>
-
-  <p class="text-xs text-gray-500">
-    Ces actions ne sont visibles que pour les administrateurs.
-  </p>
 </div>

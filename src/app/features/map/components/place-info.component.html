@@ -20,11 +20,11 @@
   </div>
 
   <div class="border-t border-gray-100 pt-3 text-xs text-gray-500 space-y-1">
-    <div>Créé le : {{ p.createdAt | date: 'short' }}</div>
-    <div *ngIf="p.updatedAt">Mis à jour le : {{ p.updatedAt | date: 'short' }}</div>
+    <div>Créé le : {{ ( p.createdAt?.toDate ? p.createdAt.toDate() : p.createdAt ) | date: 'short' }}</div>
+    <div *ngIf="p.updatedAt">Mis à jour le : {{ ( p.updatedAt?.toDate ? p.updatedAt.toDate() : p.updatedAt ) | date: 'short' }}</div>
     <div *ngIf="p.validatedBy">
       Validé par : {{ p.validatedBy }}
-      <span *ngIf="p.validatedAt">• le {{ p.validatedAt | date: 'short' }}</span>
+      <span *ngIf="p.validatedAt">• le {{ ( p.validatedAt?.toDate ? p.validatedAt.toDate() : p.validatedAt ) | date: 'short' }}</span>
     </div>
   </div>
 </div>

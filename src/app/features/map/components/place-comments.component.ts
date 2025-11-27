@@ -115,4 +115,13 @@ export class PlaceCommentsComponent implements OnInit {
     this.newRating = 5;
     this.isSubmitting = false;
   }
+
+  toDate(value: any): any {
+    if (!value) {
+      return value;
+    }
+    const v: any = value as any;
+    return v.toDate ? v.toDate() : v;
+  }
+
 }

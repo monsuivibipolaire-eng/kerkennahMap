@@ -1,29 +1,29 @@
-<ng-container *ngIf="place$ | async as place; else loading">
-  <div class="min-h-screen bg-gray-50 pb-12">
+<ng-container *ngIf="hasPlace && place as p; else loading">
+  <div class="place-detail-page">
 
-    <!-- BARRE ACTIONS ADMIN EN HAUT -->
-    <div class="max-w-6xl mx-auto px-4 pt-6 flex justify-end" *ngIf="isAdmin">
-      <app-place-admin-actions
-        [place]="place"
-        [isAdmin]="isAdmin"
-        (edit)="openEditModal($event)"
-        (delete)="onDeletePlace($event)">
-      </app-place-admin-actions>
-    </div>
-
-    <!-- HEADER / HERO -->
+    <!-- Header du lieu -->
     <app-place-header
-      [place]="place"
+      [place]="p"
       [averageRating]="averageRating"
       [commentsCount]="comments.length">
     </app-place-header>
 
-    <div class="max-w-6xl mx-auto px-4 mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- Actions admin (modifier / supprimer) -->
+    <app-place-admin-actions
+      [place]="p"
+      [isAdmin]="isAdmin"
+      (edit)="openEditModal()"
+      (delete)="onDeletePlace()">
+    </app-place-admin-actions>
 
-      <!-- COLONNE PRINCIPALE -->
-      <div class="space-y-6 lg:col-span-2">
+    <div class="mt-4 grid gap-4 lg:grid-cols-3">
+
+      <!-- Colonne principale -->
+      <div class="lg:col-span-2 space-y-4">
+
+        <!-- Galerie média -->
         <app-place-media-gallery
-          [place]="place"
+          [place]="p"
           [uploadingImages]="uploadingImages"
           [uploadingVideos]="uploadingVideos"
           [uploadError]="uploadError"
@@ -32,10 +32,12 @@
           (addVideos)="onUploadVideos($event)">
         </app-place-media-gallery>
 
+        <!-- Infos du lieu -->
         <app-place-info
-          [place]="place">
+          [place]="p">
         </app-place-info>
 
+        <!-- Commentaires -->
         <app-place-comments
           [comments]="comments"
           [isLoggedIn]="isLoggedIn"
@@ -43,19 +45,22 @@
           [isSubmitting]="isSubmittingComment"
           (submitComment)="onSubmitComment($event)">
         </app-place-comments>
+
       </div>
 
-      <!-- COLONNE LATÉRALE -->
-      <div class="space-y-6">
+      <!-- Carte -->
+      <div>
         <app-place-map-card
           [mapOptions]="mapOptions"
           [mapLayers]="mapLayers">
         </app-place-map-card>
       </div>
+
     </div>
 
+    <!-- Modale d’édition -->
     <app-place-edit-modal
-      *ngIf="showEditModal"
+      *ngIf="showEditModal && editingPlace"
       [place]="editingPlace"
       [categories]="availableCategories"
       [isSaving]="isSavingPlace"
@@ -63,11 +68,12 @@
       (cancel)="closeEditModal()"
       (save)="onSaveEditedPlace($event)">
     </app-place-edit-modal>
+
   </div>
 </ng-container>
 
 <ng-template #loading>
-  <div class="min-h-screen flex items-center justify-center text-gray-500">
+  <div class="p-4 text-center text-gray-500">
     Chargement du lieu...
   </div>
 </ng-template>

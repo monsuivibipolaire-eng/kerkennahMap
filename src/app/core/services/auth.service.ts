@@ -1,8 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { Auth, authState, GoogleAuthProvider, signInWithPopup, signOut, User as FirebaseUser } from '@angular/fire/auth';
-import { Firestore, doc, setDoc, docData } from '@angular/fire/firestore';
+import { Firestore, doc, setDoc, getDoc } from '@angular/fire/firestore';
 import { Observable, of, from } from 'rxjs';
-import { switchMap } from 'rxjs/operators';
+import { switchMap, map } from 'rxjs/operators';
 import { User } from '../models/user.model';
 
 @Injectable({
@@ -19,13 +19,22 @@ export class AuthService {
     // authState() est la version modulaire de afAuth.authState
     this.user$ = authState(this.auth).pipe(
       switchMap((user: FirebaseUser | null) => {
-        if (user) {
-          // docData() remplace valueChanges()
-          const userDocRef = doc(this.firestore, `users/${user.uid}`);
-          return docData(userDocRef) as Observable<User>;
-        } else {
+        if (!user) {
           return of(null);
         }
+
+        const userDocRef = doc(this.firestore, `users/${user.uid}`);
+        return from(getDoc(userDocRef)).pipe(
+          map((snap) => {
+            if (!snap.exists()) {
+              return null;
+            }
+            return {
+              uid: user.uid,
+              ...(snap.data() as any)
+            } as User;
+          })
+        );
       })
     );
   }
