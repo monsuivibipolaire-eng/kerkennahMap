@@ -1,41 +1,47 @@
-#!/usr/bin/env sh
-set -e
+#!/bin/bash
 
-HEADER_HTML="src/app/core/components/header/header.component.html"
+echo "🔧 Réparation de la configuration des animations Angular..."
 
-echo "=== Fix template HeaderComponent (TS2571 + Parser Error) ==="
+# On réécrit le fichier main.ts avec l'import et le provider d'animation
+cat > src/main.ts << 'EOF'
+import { bootstrapApplication } from '@angular/platform-browser';
+import { AppComponent } from './app/app.component';
+import { provideRouter, withComponentInputBinding } from '@angular/router';
+import { routes } from './app/app.routes';
+import { provideAnimations } from '@angular/platform-browser/animations'; // <-- AJOUT IMPORTANT
 
-if [ -f "$HEADER_HTML" ]; then
-  echo "-> Réécriture de $HEADER_HTML"
+// Imports Firebase
+import { provideFirebaseApp, initializeApp } from '@angular/fire/app';
+import { provideAuth, getAuth } from '@angular/fire/auth';
+import { provideFirestore, getFirestore } from '@angular/fire/firestore';
+import { FIREBASE_OPTIONS } from '@angular/fire/compat';
+import { environment } from './environments/environment';
+import * as L from 'leaflet';
 
-  cat > "$HEADER_HTML" << 'EOF'
-<header class="flex items-center justify-between px-4 py-2 bg-blue-900 text-white">
-  <div class="text-2xl">
-    🏝️ <span class="font-semibold">Mon Application</span>
-  </div>
+// Configuration des icônes Leaflet
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'assets/leaflet/marker-icon-2x.png',
+  iconUrl: 'assets/leaflet/marker-icon.png',
+  shadowUrl: 'assets/leaflet/marker-shadow.png'
+});
 
-  <div class="flex items-center gap-2">
-    <ng-container *ngIf="user$ | async as u; else loginBlock">
-      <span class="text-sm text-gray-200">Connecté en tant que</span>
-      <span class="font-semibold text-sm">
-        {{ $any(u)?.displayName || $any(u)?.email }}
-      </span>
-    </ng-container>
+bootstrapApplication(AppComponent, {
+  providers: [
+    // 👇 C'est cette ligne qui corrige l'erreur NG05105
+    provideAnimations(),
+    
+    provideRouter(routes, withComponentInputBinding()),
 
-    <ng-template #loginBlock>
-      <a
-        routerLink="/login"
-        class="px-3 py-1 rounded-full bg-white text-blue-900 text-sm font-medium"
-      >
-        Se connecter
-      </a>
-    </ng-template>
-  </div>
-</header>
+    // Initialisation Firebase
+    provideFirebaseApp(() => initializeApp(environment.firebaseConfig)),
+    provideAuth(() => getAuth()),
+    provideFirestore(() => getFirestore()),
+
+    // Provider de compatibilité
+    { provide: FIREBASE_OPTIONS, useValue: environment.firebaseConfig }
+  ]
+}).catch(err => console.error(err));
 EOF
 
-else
-  echo "⚠️ Fichier introuvable : $HEADER_HTML"
-fi
-
-echo "=== Terminé. Relance 'ng serve' ==="
+echo "✅ Animations activées avec succès dans src/main.ts !"
+echo "➡️  L'erreur NG05105 devrait avoir disparu au rechargement."

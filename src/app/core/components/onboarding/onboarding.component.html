@@ -1,0 +1,49 @@
+<div *ngIf="isVisible()" class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm transition-opacity duration-300">
+  
+  <div class="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col min-h-[500px]">
+    
+    <div class="absolute top-0 left-0 w-full h-64 bg-gradient-to-br opacity-10"
+         [ngClass]="slides[currentSlide()].color"></div>
+    <div class="absolute -top-20 -right-20 w-64 h-64 rounded-full bg-gradient-to-br opacity-20 blur-3xl"
+         [ngClass]="slides[currentSlide()].color"></div>
+
+    <button (click)="skip()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-sm font-medium z-20 px-3 py-1 rounded-full hover:bg-gray-100 transition">
+      Passer
+    </button>
+
+    <div class="flex-1 flex flex-col items-center justify-center p-8 text-center z-10 mt-8" [@fadeSlide]="currentSlide()">
+      
+      <div class="w-24 h-24 rounded-full flex items-center justify-center text-5xl mb-8 shadow-lg bg-gradient-to-br text-white transform transition-all duration-500 hover:scale-110"
+           [ngClass]="slides[currentSlide()].color">
+        {{ slides[currentSlide()].icon }}
+      </div>
+
+      <h2 class="text-2xl font-bold text-gray-800 mb-4 font-outfit">
+        {{ slides[currentSlide()].title }}
+      </h2>
+      <p class="text-gray-600 leading-relaxed text-sm md:text-base px-2">
+        {{ slides[currentSlide()].desc }}
+      </p>
+    </div>
+
+    <div class="p-8 pt-0 z-10">
+      
+      <div class="flex justify-center gap-2 mb-6">
+        <div *ngFor="let s of slides; let i = index" 
+             class="h-2 rounded-full transition-all duration-300"
+             [class.w-8]="i === currentSlide()"
+             [class.bg-blue-600]="i === currentSlide()"
+             [class.w-2]="i !== currentSlide()"
+             [class.bg-gray-200]="i !== currentSlide()">
+        </div>
+      </div>
+
+      <button (click)="next()" 
+              class="w-full py-4 rounded-xl text-white font-bold text-lg shadow-lg hover:shadow-xl active:scale-95 transition-all duration-200 bg-gradient-to-r"
+              [ngClass]="slides[currentSlide()].color">
+        {{ currentSlide() === slides.length - 1 ? 'Commencer' : 'Suivant' }}
+      </button>
+    </div>
+
+  </div>
+</div>
